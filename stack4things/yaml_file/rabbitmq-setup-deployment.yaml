@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.cmd: kompose convert
+    kompose.version: 1.35.0 (9532ceef3)
+  labels:
+    io.kompose.service: rabbitmq-setup
+  name: rabbitmq-setup
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: rabbitmq-setup
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: kompose convert
+        kompose.version: 1.35.0 (9532ceef3)
+      labels:
+        io.kompose.service: rabbitmq-setup
+    spec:
+      containers:
+        - args:
+            - echo
+            - Aspettando RabbitMQ...
+          command:
+            - /bin/sh
+            - -c
+          image: rabbitmq:3.7-management
+          name: rabbitmq-setup
+      restartPolicy: Always

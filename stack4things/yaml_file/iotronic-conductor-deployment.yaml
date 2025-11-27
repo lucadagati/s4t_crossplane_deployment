@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.cmd: kompose convert
+    kompose.version: 1.35.0 (9532ceef3)
+  labels:
+    io.kompose.service: iotronic-conductor
+  name: iotronic-conductor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: iotronic-conductor
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: kompose convert
+        kompose.version: 1.35.0 (9532ceef3)
+      labels:
+        io.kompose.service: iotronic-conductor
+    spec:
+      containers:
+        - args:
+            - /bin/bash
+            - -c
+            - "\n  apt-get update && apt-get install -y mysql-client nano;\n  echo '[INFO] Attesa del database MySQL...';\n  until mysql -h iotronic-db -uiotronic -punime -e 'SELECT 1' >/dev/null 2>&1; do\n    echo '[INFO] Database non ancora pronto, riprovo...';\n    sleep 5;\n  done;\n  iotronic-dbsync;\n  echo '[INFO] Configurazione dei permessi sui log...';\n  chown -R iotronic:iotronic /var/log/iotronic;\n  echo '[INFO] Avvio di Iotronic Conductor...';\n  echo '[INFO] End of configuration!';  \n\n  touch /tmp/conductor-setup-done;  \n  exec /usr/local/bin/startConductor"
+          env:
+            - name: DB_CONNECTION_STRING
+              value: mysql+pymysql://iotronic:unime@iotronic-db/iotronic
+            - name: DB_HOST
+              value: iotronic-db
+            - name: IOTRONIC_DBPASS
+              value: unime
+            - name: IOTRONIC_DB_NAME
+              value: iotronic
+            - name: IOTRONIC_DB_USER
+              value: iotronic
+            - name: MYSQL_ROOT_PASSWORD
+              value: s4t
+            - name: OS_AUTH_URL
+              value: http://keystone:5000/v3
+            - name: OS_PASSWORD
+              value: s4t
+            - name: OS_PROJECT_DOMAIN_NAME
+              value: Default
+            - name: OS_PROJECT_NAME
+              value: admin
+            - name: OS_USERNAME
+              value: admin
+            - name: OS_USER_DOMAIN_NAME
+              value: Default
+          image: lucadagati/iotronic-conductor:latest
+          name: iotronic-conductor
+          ports:
+            - containerPort: 8812
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /etc/iotronic
+              name: iotronic-conductor-cm0
+            - mountPath: /var/log/iotronic
+              name: iotronic-logs
+      restartPolicy: Always
+      volumes:
+        - configMap:
+            name: iotronic-conductor-cm0
+          name: iotronic-conductor-cm0
+        - name: iotronic-logs
+          persistentVolumeClaim:
+            claimName: iotronic-logs
