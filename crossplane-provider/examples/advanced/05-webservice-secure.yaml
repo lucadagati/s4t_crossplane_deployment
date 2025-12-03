@@ -1,0 +1,57 @@
+---
+# Esempio Avanzato: Webservice Sicuro (HTTPS)
+# Crea un webservice HTTPS con certificato SSL
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: Webservice
+metadata:
+  name: secure-api-webservice
+  labels:
+    app: secure-api
+    security: enabled
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    name: "Secure API Webservice"
+    port: 8443
+    boardUuid: "BOARD_UUID_HERE"
+    secure: true  # Abilita HTTPS
+
+---
+# Esempio: Webservice Admin Sicuro
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: Webservice
+metadata:
+  name: admin-panel-secure
+  labels:
+    app: admin-panel
+    security: enabled
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    name: "Admin Panel (HTTPS)"
+    port: 443
+    boardUuid: "BOARD_UUID_HERE"
+    secure: true
+
+---
+# Esempio: Webservice con Porta Personalizzata
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: Webservice
+metadata:
+  name: custom-port-webservice
+  labels:
+    app: custom-service
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    name: "Custom Port Webservice"
+    port: 9090  # Porta personalizzata
+    boardUuid: "BOARD_UUID_HERE"
+    secure: false
+

@@ -1,0 +1,49 @@
+---
+# Esempio Avanzato: Creazione Plugin
+# Questo esempio mostra come creare un plugin completo con codice e parametri
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: Plugin
+metadata:
+  name: temperature-monitor-plugin
+  labels:
+    app: iot-monitoring
+    type: sensor
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    name: "Temperature Monitor Plugin"
+    version: "1.0.0"
+    code: |
+      #!/bin/bash
+      # Plugin per monitoraggio temperatura
+      # Questo è un esempio di codice plugin
+      TEMP=$(cat /sys/class/thermal/thermal_zone0/temp)
+      TEMP_C=$((TEMP/1000))
+      echo "Temperature: ${TEMP_C}°C"
+      # Invia dati a Stack4Things
+      curl -X POST http://localhost:8812/api/v1/data \
+        -H "Content-Type: application/json" \
+        -d "{\"temperature\": ${TEMP_C}, \"timestamp\": $(date +%s)}"
+    parameters:
+      interval: "60"
+      threshold: "70"
+      alert: "true"
+
+---
+# Esempio: Plugin con configurazione minima
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: Plugin
+metadata:
+  name: simple-plugin
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    name: "Simple Plugin"
+    code: |
+      echo "Hello from plugin"
+    parameters: {}
+

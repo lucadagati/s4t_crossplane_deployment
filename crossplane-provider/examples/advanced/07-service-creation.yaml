@@ -1,0 +1,77 @@
+---
+# Esempio Avanzato: Creazione Service
+# Crea un service completo con configurazione
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: Service
+metadata:
+  name: data-collection-service
+  labels:
+    app: data-collection
+    type: service
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    name: "Data Collection Service"
+    project: "admin"
+    port: 5000
+    protocol: "TCP"
+
+---
+# Esempio: Service per Comunicazione MQTT
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: Service
+metadata:
+  name: mqtt-service
+  labels:
+    app: mqtt
+    protocol: mqtt
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    name: "MQTT Service"
+    project: "admin"
+    port: 1883
+    protocol: "TCP"
+
+---
+# Esempio: Service per Database
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: Service
+metadata:
+  name: database-service
+  labels:
+    app: database
+    type: service
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    name: "Database Service"
+    project: "admin"
+    port: 5432
+    protocol: "TCP"
+
+---
+# Esempio: Service UDP per Telemetria
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: Service
+metadata:
+  name: telemetry-service
+  labels:
+    app: telemetry
+    protocol: udp
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    name: "Telemetry Service"
+    project: "admin"
+    port: 514
+    protocol: "UDP"
+

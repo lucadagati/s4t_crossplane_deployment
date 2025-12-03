@@ -65,27 +65,43 @@ var (
 		if err != nil {
 			return nil, errors.Wrap(err, errNewClient)
 		}
+		
+		// Set Keystone endpoint via environment variable (OS_AUTH_URL)
+		// IMPORTANT: Must be set BEFORE FormatAuthRequ, as SDK may read it during auth request creation
+		if keystoneEndpoint != "" {
+			os.Setenv("OS_AUTH_URL", keystoneEndpoint)
+		} else {
+			// Default to Kubernetes service
+			os.Setenv("OS_AUTH_URL", "http://keystone.default.svc.cluster.local:5000/v3")
+		}
+		
+		// Also set other OpenStack env vars that SDK might need
+		os.Setenv("OS_IDENTITY_API_VERSION", "3")
+		
 		auth_req := read_config.FormatAuthRequ(
 			result["username"],
 			result["password"],
 			result["domain"],
 		)
 		
-		// Set Keystone endpoint via environment variable (OS_AUTH_URL)
+		// Ensure OS_AUTH_URL is still set (in case FormatAuthRequ cleared it)
 		if keystoneEndpoint != "" {
 			os.Setenv("OS_AUTH_URL", keystoneEndpoint)
 		} else {
 			os.Setenv("OS_AUTH_URL", "http://keystone.default.svc.cluster.local:5000/v3")
 		}
+		
 		// Extract host from keystoneEndpoint BEFORE creating client
 		// SDK uses hardcoded 127.0.0.1, we need to use Kubernetes service
 		endpoint := keystoneEndpoint
 		if endpoint == "" {
 			endpoint = "http://keystone.default.svc.cluster.local:5000/v3"
 		}
+		// Remove /v3 suffix if present
 		if strings.HasSuffix(endpoint, "/v3") {
 			endpoint = strings.TrimSuffix(endpoint, "/v3")
 		}
+		// Extract just the host (without port) while keeping scheme for downstream requests
 		scheme := "http://"
 		if strings.HasPrefix(endpoint, "https://") {
 			scheme = "https://"
@@ -93,13 +109,15 @@ var (
 		} else if strings.HasPrefix(endpoint, "http://") {
 			endpoint = strings.TrimPrefix(endpoint, "http://")
 		}
+		// Remove port if present (e.g., :5000)
 		if idx := strings.Index(endpoint, ":"); idx != -1 {
 			endpoint = endpoint[:idx]
 		}
 		keystoneHost := scheme + endpoint
 		
 		// Create client manually with correct host (without port) instead of using GetClientConnection
-		// SDK will derive final URL using AuthPort
+		// GetClientConnection uses hardcoded 127.0.0.1, so we create client and authenticate manually
+		// SDK will construct URL as http://<host>:<AuthPort>/v3/auth/tokens
 		s4t_client := s4t.NewClient(keystoneHost)
 		s4t_client.Port = "8812"
 		s4t_client.AuthPort = "5000"
@@ -111,6 +129,7 @@ var (
 		}
 		s4t_client.AuthToken = token
 		
+		// After authentication, switch client endpoint to IoTronic conductor service
 		iotronicHost := scheme + "iotronic-conductor.default.svc.cluster.local"
 		s4t_client.Endpoint = iotronicHost
 		

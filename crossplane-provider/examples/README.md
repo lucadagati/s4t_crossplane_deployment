@@ -42,6 +42,24 @@ Questa directory contiene esempi per tutte le risorse gestite dal provider Cross
 11. **Site** - Gestione siti (multisite)
     - `multisite/site-example.yaml` - Esempio base
 
+## 🎯 Esempi Avanzati
+
+Per scenari d'uso complessi e workflow completi, consulta la directory **[`advanced/`](advanced/README.md)** che contiene:
+
+- **Plugin Injection Workflow** - Creazione e injection di plugin con dipendenze
+- **Webservice Deployment** - Configurazione avanzata di webservice (HTTPS, metadati, load balancing)
+- **Service Injection Pattern** - Injection di service su singoli o multipli board
+- **Multi-Resource Deployment** - Deployment completo di applicazioni IoT end-to-end
+
+Gli esempi avanzati includono:
+- Workflow step-by-step
+- Configurazioni di produzione
+- Best practices
+- Gestione di dipendenze tra risorse
+- Esempi di deployment distribuiti
+
+👉 **[Vai agli Esempi Avanzati →](advanced/README.md)**
+
 ## 🚀 Utilizzo
 
 ### Prerequisiti

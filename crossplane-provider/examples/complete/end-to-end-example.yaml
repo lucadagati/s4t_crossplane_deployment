@@ -1,0 +1,141 @@
+---
+# Esempio Completo End-to-End: Device + Plugin + Injection
+# Questo esempio mostra il flusso completo dalla creazione della board
+# all'iniezione del plugin
+
+# 1. Creazione Device (Board)
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: Device
+metadata:
+  name: complete-example-board
+  labels:
+    example: end-to-end
+    environment: test
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    name: "Complete Example Board"
+    code: "COMPLETE-EXAMPLE-001"
+    type: "virtual"
+    location:
+      - latitude: "45.0"
+        longitude: "9.0"
+        altitude: "100"
+
+---
+# 2. Creazione Plugin
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: Plugin
+metadata:
+  name: complete-example-plugin
+  labels:
+    example: end-to-end
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    name: "Complete Example Plugin"
+    version: "1.0.0"
+    code: |
+      from iotronic_lightningrod.modules.plugins import Plugin
+      from oslo_log import log as logging
+      import time
+      
+      LOG = logging.getLogger(__name__)
+      
+      class Worker(Plugin.Plugin):
+          def __init__(self, uuid, name, q_result=None, params=None):
+              super(Worker, self).__init__(uuid, name, q_result, params)
+      
+          def run(self):
+              LOG.info("Complete Example Plugin starting...")
+              LOG.info("Parameters: %s", self.params)
+              
+              counter = 0
+              while (self._is_running):
+                  counter += 1
+                  message = self.params.get('message', 'Default message')
+                  LOG.info("Plugin iteration %d: %s", counter, message)
+                  print(f"Plugin running - iteration {counter}: {message}")
+                  time.sleep(self.params.get('interval', 5))
+              
+              LOG.info("Complete Example Plugin stopped")
+    parameters:
+      message: "Hello from complete example!"
+      interval: "5"
+
+---
+# 3. Creazione Service
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: Service
+metadata:
+  name: complete-example-service
+  labels:
+    example: end-to-end
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    name: "Complete Example Service"
+    project: "admin"
+    port: 8080
+    protocol: "TCP"
+
+---
+# NOTA: L'iniezione richiede che:
+# 1. Il Device sia stato creato e abbia un UUID
+# 2. Il Plugin sia stato creato e abbia un UUID
+# 3. La board sia online (richiede Lightning Rod connesso)
+#
+# Per applicare l'iniezione:
+# 1. Ottieni gli UUID:
+#    BOARD_UUID=$(kubectl get device complete-example-board -o jsonpath='{.status.atProvider.uuid}')
+#    PLUGIN_UUID=$(kubectl get plugin complete-example-plugin -o jsonpath='{.status.atProvider.uuid}')
+#
+# 2. Verifica che la board sia online:
+#    TOKEN=$(./test-s4t-apis.sh admin s4t admin | grep "Token ottenuto" | cut -d: -f2 | tr -d ' ')
+#    curl -H "X-Auth-Token: $TOKEN" \
+#      http://$(kubectl get svc iotronic-conductor -o jsonpath='{.spec.clusterIP}'):8812/v1/boards/$BOARD_UUID | \
+#      jq '{status, agent, session}'
+#
+# 3. Applica l'iniezione (sostituisci <BOARD_UUID> e <PLUGIN_UUID>):
+#    sed -i "s/<BOARD_UUID>/$BOARD_UUID/" injection.yaml
+#    sed -i "s/<PLUGIN_UUID>/$PLUGIN_UUID/" injection.yaml
+#    kubectl apply -f injection.yaml
+
+---
+# 4. Iniezione Plugin (da applicare dopo che board è online)
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: BoardPluginInjection
+metadata:
+  name: complete-example-plugin-injection
+  labels:
+    example: end-to-end
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    boardUuid: "<BOARD_UUID>"  # Sostituisci con UUID reale
+    pluginUuid: "<PLUGIN_UUID>"  # Sostituisci con UUID reale
+
+---
+# 5. Iniezione Service (da applicare dopo che board è online)
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: BoardServiceInjection
+metadata:
+  name: complete-example-service-injection
+  labels:
+    example: end-to-end
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    boardUuid: "<BOARD_UUID>"  # Sostituisci con UUID reale
+    serviceUuid: "<SERVICE_UUID>"  # Sostituisci con UUID reale
+

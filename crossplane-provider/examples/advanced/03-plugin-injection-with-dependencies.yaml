@@ -1,0 +1,104 @@
+---
+# Esempio Avanzato: Plugin Injection con Dipendenze
+# Questo esempio mostra come gestire plugin che dipendono da altri plugin o servizi
+# 
+# Scenario: Un plugin di monitoraggio che dipende da un plugin di logging
+# 
+# Passi:
+# 1. Creare prima il plugin di logging
+# 2. Creare il plugin di monitoraggio
+# 3. Iniettare prima il plugin di logging
+# 4. Iniettare poi il plugin di monitoraggio
+
+---
+# Step 1: Plugin di Logging (dipendenza)
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: Plugin
+metadata:
+  name: logging-plugin
+  labels:
+    app: iot-monitoring
+    role: logging
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    name: "Logging Plugin"
+    version: "1.0.0"
+    code: |
+      #!/bin/bash
+      LOG_FILE="/var/log/iot.log"
+      echo "[$(date)] $*" >> "$LOG_FILE"
+    parameters:
+      logLevel: "INFO"
+      logFile: "/var/log/iot.log"
+
+---
+# Step 2: Plugin di Monitoraggio (dipende da logging)
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: Plugin
+metadata:
+  name: monitoring-plugin
+  labels:
+    app: iot-monitoring
+    role: monitoring
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    name: "Monitoring Plugin"
+    version: "1.0.0"
+    code: |
+      #!/bin/bash
+      # Usa il logging plugin per loggare
+      source /opt/plugins/logging.sh
+      log_message "Starting monitoring..."
+      
+      # Monitoraggio temperatura
+      TEMP=$(cat /sys/class/thermal/thermal_zone0/temp)
+      TEMP_C=$((TEMP/1000))
+      log_message "Temperature: ${TEMP_C}°C"
+      
+      if [ $TEMP_C -gt 70 ]; then
+        log_message "WARNING: High temperature detected!"
+      fi
+    parameters:
+      checkInterval: "30"
+      maxTemperature: "70"
+
+---
+# Step 3: Injection del plugin di logging (prima)
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: BoardPluginInjection
+metadata:
+  name: logging-injection
+  labels:
+    app: iot-monitoring
+    order: "1"
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    boardUuid: "BOARD_UUID_HERE"
+    pluginUuid: "LOGGING_PLUGIN_UUID_HERE"  # UUID del plugin logging-plugin
+
+---
+# Step 4: Injection del plugin di monitoraggio (dopo)
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: BoardPluginInjection
+metadata:
+  name: monitoring-injection
+  labels:
+    app: iot-monitoring
+    order: "2"
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    boardUuid: "BOARD_UUID_HERE"
+    pluginUuid: "MONITORING_PLUGIN_UUID_HERE"  # UUID del plugin monitoring-plugin
+

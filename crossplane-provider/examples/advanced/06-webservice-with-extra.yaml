@@ -1,0 +1,99 @@
+---
+# Esempio Avanzato: Webservice con Metadati Aggiuntivi
+# Crea un webservice con configurazione extra tramite campo 'extra'
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: Webservice
+metadata:
+  name: advanced-webservice
+  labels:
+    app: advanced-service
+    environment: production
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    name: "Advanced Webservice"
+    port: 8080
+    boardUuid: "BOARD_UUID_HERE"
+    secure: false
+    extra:
+      # Metadati aggiuntivi per il webservice
+      description: "Webservice avanzato con configurazione custom"
+      environment: "production"
+      version: "2.0.0"
+      features:
+        - "authentication"
+        - "rate-limiting"
+        - "logging"
+      config:
+        timeout: 30
+        maxConnections: 100
+        enableCors: true
+        corsOrigins:
+          - "https://example.com"
+          - "https://app.example.com"
+
+---
+# Esempio: Webservice con Configurazione per Load Balancer
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: Webservice
+metadata:
+  name: load-balanced-webservice
+  labels:
+    app: load-balanced
+    type: webservice
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    name: "Load Balanced Webservice"
+    port: 8080
+    boardUuid: "BOARD_UUID_HERE"
+    secure: false
+    extra:
+      loadBalancer:
+        enabled: true
+        algorithm: "round-robin"
+        healthCheck:
+          path: "/health"
+          interval: 10
+          timeout: 5
+      monitoring:
+        enabled: true
+        metrics:
+          - "request_count"
+          - "response_time"
+          - "error_rate"
+
+---
+# Esempio: Webservice con Autenticazione
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: Webservice
+metadata:
+  name: authenticated-webservice
+  labels:
+    app: authenticated-service
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    name: "Authenticated Webservice"
+    port: 8080
+    boardUuid: "BOARD_UUID_HERE"
+    secure: true
+    extra:
+      authentication:
+        type: "jwt"
+        required: true
+        tokenHeader: "Authorization"
+      authorization:
+        roles:
+          - "admin"
+          - "user"
+        permissions:
+          - "read"
+          - "write"
+

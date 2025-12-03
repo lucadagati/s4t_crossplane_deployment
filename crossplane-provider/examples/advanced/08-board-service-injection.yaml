@@ -1,0 +1,56 @@
+---
+# Esempio Avanzato: Board Service Injection
+# Inietta un service su un board specifico
+# IMPORTANTE: Sostituire BOARD_UUID_HERE e SERVICE_UUID_HERE con valori reali
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: BoardServiceInjection
+metadata:
+  name: data-collection-injection
+  labels:
+    app: data-collection
+    board: production-board-01
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    # UUID del board su cui iniettare il service
+    boardUuid: "BOARD_UUID_HERE"
+    # UUID del service da iniettare
+    # Se il service è stato creato via Crossplane, l'UUID sarà nel status
+    serviceUuid: "SERVICE_UUID_HERE"
+
+---
+# Esempio: Injection di Service MQTT
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: BoardServiceInjection
+metadata:
+  name: mqtt-injection
+  labels:
+    app: mqtt
+    board: production-board-01
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    boardUuid: "BOARD_UUID_HERE"
+    serviceUuid: "MQTT_SERVICE_UUID_HERE"
+
+---
+# Esempio: Injection di Service Database
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: BoardServiceInjection
+metadata:
+  name: database-injection
+  labels:
+    app: database
+    board: production-board-01
+spec:
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+  forProvider:
+    boardUuid: "BOARD_UUID_HERE"
+    serviceUuid: "DATABASE_SERVICE_UUID_HERE"
+
