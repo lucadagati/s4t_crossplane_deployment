@@ -8,6 +8,7 @@ This repository contains the complete deployment of Stack4Things (S4T) integrate
 - [System Overview](#system-overview)
 - [Architecture Overview](#architecture-overview)
 - [Quick Start](#quick-start)
+- [Accessing Dashboards](#accessing-dashboards)
 - [Deployment Guide](#deployment-guide)
 - [Usage Examples](#usage-examples)
 - [Authentication and Authorization](#authentication-and-authorization)
