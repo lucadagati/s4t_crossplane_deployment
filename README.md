@@ -281,7 +281,7 @@ The IoTronic UI (Horizon) dashboard provides a web interface for managing boards
 
 2. **LoadBalancer Access** (if MetalLB is configured):
    - Get the LoadBalancer IP:
-     ```bash
+```bash
      kubectl get svc istio-ingress -n istio-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
      ```
    - URL: `http://<loadbalancer-ip>/horizon`
@@ -324,17 +324,23 @@ Keycloak provides an admin console for managing users, groups, and OIDC clients.
    - Example: `https://192.168.100.60:8443`
    - Accept the self-signed certificate warning in your browser
 
-2. **NodePort Service** (Alternative for persistent remote access):
+2. **NodePort Service** (Recommended for persistent remote access):
    
    Create a NodePort service for Keycloak:
    ```bash
-   kubectl patch svc keycloak -n keycloak -p '{"spec":{"type":"NodePort","ports":[{"port":8443,"targetPort":8443,"nodePort":30443}]}}'
+   kubectl patch svc keycloak -n keycloak -p '{"spec":{"type":"NodePort","ports":[{"name":"https","port":8443,"targetPort":8443,"nodePort":30443,"protocol":"TCP"}]}}'
    ```
    
    Then access from your remote machine:
    - URL: `https://<server-ip>:30443`
-   - Example: `https://192.168.100.60:30443`
-   - Accept the self-signed certificate warning
+   - Example: `https://100.74.113.72:30443`
+   - **Important**: Use HTTPS (not HTTP) - Keycloak uses HTTPS on port 8443
+   - Accept the self-signed certificate warning in your browser
+   
+   **Note**: If you see "connection refused" or cannot access, verify:
+   - The service is type NodePort: `kubectl get svc keycloak -n keycloak`
+   - Firewall allows port 30443: `sudo ufw allow 30443/tcp`
+   - Keycloak pod is running: `kubectl get pods -n keycloak`
 
 **Credentials:**
 - Username: `admin`
@@ -348,9 +354,11 @@ Keycloak provides an admin console for managing users, groups, and OIDC clients.
 - View authentication logs
 
 **Important Notes:**
+- **Keycloak uses HTTPS, not HTTP** - Always use `https://` in the URL, not `http://`
 - The port-forward method requires the `kubectl port-forward` command to remain running on the server
-- For persistent access without keeping port-forward running, use the NodePort method
+- For persistent access without keeping port-forward running, use the NodePort method (recommended)
 - Both methods use HTTPS with self-signed certificates - your browser will show a security warning that you need to accept
+- Default Keycloak service is ClusterIP only - you must create a NodePort service for remote access
 
 ### Troubleshooting Dashboard Access
 
@@ -409,16 +417,34 @@ Keycloak provides an admin console for managing users, groups, and OIDC clients.
    kubectl port-forward -n keycloak svc/keycloak 8443:8443 --address 0.0.0.0
    ```
 
-4. For NodePort method, verify the service exists and firewall allows the port:
+4. For NodePort method, verify the service exists and is type NodePort:
    ```bash
    kubectl get svc keycloak -n keycloak
-   sudo ufw allow 30443/tcp  # If using NodePort 30443
+   # Should show type: NodePort and port 30443:8443/TCP
+   ```
+   
+   If the service is still ClusterIP, create NodePort:
+   ```bash
+   kubectl patch svc keycloak -n keycloak -p '{"spec":{"type":"NodePort","ports":[{"name":"https","port":8443,"targetPort":8443,"nodePort":30443,"protocol":"TCP"}]}}'
    ```
 
-5. Verify HTTPS connectivity from remote machine:
+5. Verify firewall allows the NodePort:
+   ```bash
+   sudo ufw allow 30443/tcp  # If using NodePort 30443
+   sudo ufw status
+   ```
+
+6. Verify HTTPS connectivity from remote machine (use NodePort, not 8443):
    ```bash
    # From your remote machine (ignore certificate errors)
-   curl -k https://<server-ip>:8443
+   curl -k https://<server-ip>:30443
+   ```
+   
+   **Common Error**: If you try `http://` instead of `https://`, you will get connection refused. Always use `https://` for Keycloak.
+
+7. Check Keycloak pod logs if still having issues:
+   ```bash
+   kubectl logs -n keycloak -l app=keycloak --tail=50
    ```
 
 **General Remote Access Tips:**
