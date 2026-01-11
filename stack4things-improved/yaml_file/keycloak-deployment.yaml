@@ -77,18 +77,20 @@ spec:
           httpGet:
             path: /health/ready
             port: 8080
-          initialDelaySeconds: 120
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 5
+            scheme: HTTP
+          initialDelaySeconds: 180
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 10
         livenessProbe:
           httpGet:
             path: /health/live
             port: 8080
-          initialDelaySeconds: 180
+            scheme: HTTP
+          initialDelaySeconds: 240
           periodSeconds: 30
-          timeoutSeconds: 5
-          failureThreshold: 3
+          timeoutSeconds: 10
+          failureThreshold: 5
       volumes:
       - name: keycloak-data
         persistentVolumeClaim:

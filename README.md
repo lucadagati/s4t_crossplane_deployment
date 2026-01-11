@@ -319,28 +319,44 @@ Keycloak provides an admin console for managing users, groups, and OIDC clients.
    
    This binds the port-forward to all interfaces (0.0.0.0), making it accessible remotely.
    
+   **Important**: Keep this command running in a terminal or run it in the background:
+   ```bash
+   kubectl port-forward -n keycloak svc/keycloak 8443:8443 --address 0.0.0.0 > /tmp/keycloak-pf.log 2>&1 &
+   ```
+   
    Then, from your remote machine, access:
    - URL: `https://<server-ip>:8443`
-   - Example: `https://192.168.100.60:8443`
+   - Example: `https://100.74.113.72:8443`
    - Accept the self-signed certificate warning in your browser
+   
+   **Note**: The port-forward will stop if the terminal session ends. For persistent access, use the NodePort method below.
 
-2. **NodePort Service** (Recommended for persistent remote access):
+2. **NodePort Service** (For persistent remote access):
    
    Create a NodePort service for Keycloak:
    ```bash
    kubectl patch svc keycloak -n keycloak -p '{"spec":{"type":"NodePort","ports":[{"name":"https","port":8443,"targetPort":8443,"nodePort":30443,"protocol":"TCP"}]}}'
    ```
    
-   Then access from your remote machine:
+   **Important**: The Keycloak pods must be READY (not just Running) for the NodePort to work. Check pod status:
+   ```bash
+   kubectl get pods -n keycloak
+   kubectl get endpoints keycloak -n keycloak
+   ```
+   
+   If the pods are not READY, wait 5-10 minutes after Keycloak startup, or use the port-forward method above.
+   
+   Once pods are READY, access from your remote machine:
    - URL: `https://<server-ip>:30443`
    - Example: `https://100.74.113.72:30443`
    - **Important**: Use HTTPS (not HTTP) - Keycloak uses HTTPS on port 8443
    - Accept the self-signed certificate warning in your browser
    
-   **Note**: If you see "connection refused" or cannot access, verify:
-   - The service is type NodePort: `kubectl get svc keycloak -n keycloak`
-   - Firewall allows port 30443: `sudo ufw allow 30443/tcp`
-   - Keycloak pod is running: `kubectl get pods -n keycloak`
+   **Troubleshooting**: If you see "connection refused":
+   - Verify the service is type NodePort: `kubectl get svc keycloak -n keycloak`
+   - Check that endpoints exist: `kubectl get endpoints keycloak -n keycloak` (should show IP addresses)
+   - Verify firewall allows port 30443: `sudo ufw allow 30443/tcp`
+   - Check Keycloak pod is READY: `kubectl get pods -n keycloak` (should show `1/1 READY`)
 
 **Credentials:**
 - Username: `admin`
