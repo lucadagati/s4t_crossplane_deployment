@@ -243,9 +243,189 @@ This script automatically:
    kubectl get pods -A | grep -E "iotronic|crossplane|keycloak|keystone|controller-manager"
    ```
 
-3. **Access the dashboard**:
-   - Direct NodePort: `http://<node-ip>:31123/horizon`
+3. **Access the dashboard** (see [Accessing Dashboards](#accessing-dashboards) section below):
+   - Direct NodePort: `http://<server-ip>:31123/horizon`
    - Credentials: `admin` / `s4t`
+
+## Accessing Dashboards
+
+All dashboards are accessible remotely using the server's IP address. You do not need to be on the server itself to access them.
+
+### Getting the Server IP Address
+
+First, determine the IP address of your server:
+
+```bash
+# Get the server's IP address
+hostname -I | awk '{print $1}'
+
+# Or check the node IP from Kubernetes
+kubectl get nodes -o wide
+```
+
+The IP address shown will be used to access all dashboards from your remote machine.
+
+### IoTronic UI Dashboard
+
+The IoTronic UI (Horizon) dashboard provides a web interface for managing boards, plugins, and services.
+
+**Access Methods:**
+
+1. **Direct NodePort Access** (Recommended for remote access):
+   - Get the server IP address (see above)
+   - URL: `http://<server-ip>:31123/horizon`
+   - Example: `http://192.168.100.60:31123/horizon`
+   - Works immediately after deployment
+   - Accessible from any machine on the network
+
+2. **LoadBalancer Access** (if MetalLB is configured):
+   - Get the LoadBalancer IP:
+     ```bash
+     kubectl get svc istio-ingress -n istio-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+     ```
+   - URL: `http://<loadbalancer-ip>/horizon`
+   - Accessible from any machine on the network
+
+**Credentials:**
+- Username: `admin`
+- Password: `s4t`
+
+**Dashboard Features:**
+- View and manage IoT boards
+- Create and inject plugins
+- Manage services
+- Monitor board status (online/offline/registered)
+- View plugin execution logs
+
+**Example Remote Access:**
+If your server IP is `192.168.100.60`, open in your browser:
+```
+http://192.168.100.60:31123/horizon
+```
+
+### Keycloak Admin Console
+
+Keycloak provides an admin console for managing users, groups, and OIDC clients.
+
+**Access Methods:**
+
+1. **Port Forward with Remote Binding** (Recommended for remote access):
+   
+   On the server, run:
+   ```bash
+   kubectl port-forward -n keycloak svc/keycloak 8443:8443 --address 0.0.0.0
+   ```
+   
+   This binds the port-forward to all interfaces (0.0.0.0), making it accessible remotely.
+   
+   Then, from your remote machine, access:
+   - URL: `https://<server-ip>:8443`
+   - Example: `https://192.168.100.60:8443`
+   - Accept the self-signed certificate warning in your browser
+
+2. **NodePort Service** (Alternative for persistent remote access):
+   
+   Create a NodePort service for Keycloak:
+   ```bash
+   kubectl patch svc keycloak -n keycloak -p '{"spec":{"type":"NodePort","ports":[{"port":8443,"targetPort":8443,"nodePort":30443}]}}'
+   ```
+   
+   Then access from your remote machine:
+   - URL: `https://<server-ip>:30443`
+   - Example: `https://192.168.100.60:30443`
+   - Accept the self-signed certificate warning
+
+**Credentials:**
+- Username: `admin`
+- Password: `admin`
+
+**Keycloak Console Features:**
+- Manage users and groups
+- Configure OIDC clients
+- Manage realms
+- Configure identity providers
+- View authentication logs
+
+**Important Notes:**
+- The port-forward method requires the `kubectl port-forward` command to remain running on the server
+- For persistent access without keeping port-forward running, use the NodePort method
+- Both methods use HTTPS with self-signed certificates - your browser will show a security warning that you need to accept
+
+### Troubleshooting Dashboard Access
+
+**Issue: Cannot access IoTronic UI from remote machine**
+
+1. Verify the service is running:
+   ```bash
+   kubectl get pods -n default -l io.kompose.service=iotronic-ui
+   ```
+
+2. Check the NodePort:
+   ```bash
+   kubectl get svc iotronic-ui-direct -n default
+   ```
+   Ensure the NodePort is `31123`
+
+3. Verify firewall rules on the server allow access to port 31123:
+   ```bash
+   # Check if firewall is active
+   sudo ufw status
+   
+   # If firewall is active, allow port 31123
+   sudo ufw allow 31123/tcp
+   ```
+
+4. Verify the server IP is correct:
+   ```bash
+   hostname -I
+   ```
+
+5. Test connectivity from your remote machine:
+   ```bash
+   # From your remote machine
+   curl http://<server-ip>:31123/horizon
+   ```
+
+6. Check if the service is listening on all interfaces:
+   ```bash
+   kubectl get svc iotronic-ui-direct -n default -o yaml | grep nodePort
+   ```
+
+**Issue: Cannot access Keycloak from remote machine**
+
+1. Verify Keycloak pod is running:
+   ```bash
+   kubectl get pods -n keycloak
+   ```
+
+2. Check Keycloak logs:
+   ```bash
+   kubectl logs -n keycloak -l app=keycloak --tail=50
+   ```
+
+3. For port-forward method, ensure you use `--address 0.0.0.0`:
+   ```bash
+   kubectl port-forward -n keycloak svc/keycloak 8443:8443 --address 0.0.0.0
+   ```
+
+4. For NodePort method, verify the service exists and firewall allows the port:
+   ```bash
+   kubectl get svc keycloak -n keycloak
+   sudo ufw allow 30443/tcp  # If using NodePort 30443
+   ```
+
+5. Verify HTTPS connectivity from remote machine:
+   ```bash
+   # From your remote machine (ignore certificate errors)
+   curl -k https://<server-ip>:8443
+   ```
+
+**General Remote Access Tips:**
+
+- Ensure your server's firewall allows incoming connections on the required ports
+- If behind a router/NAT, ensure port forwarding is configured
+- Use the server's public IP if accessing from outside the local network
+- For production deployments, consider setting up proper TLS certificates instead of self-signed certificates
 
 ## Deployment Guide
 
