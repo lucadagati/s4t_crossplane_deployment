@@ -261,6 +261,18 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	}, nil
 }
 
+// Create creates a new board (device) in IoTronic.
+// API: POST /v1/boards
+// Request Body:
+//   {
+//     "name": "string (required)",
+//     "code": "string (required, unique)",
+//     "type": "virtual|physical (required)",
+//     "location": [{"latitude": "string", "longitude": "string", "altitude": "string"}]
+//   }
+// Response: Board object with UUID, status, agent, session
+// The board will be created with status 'registered' and must be connected
+// via Lightning Rod to become 'online'
 func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
 	cr, ok := mg.(*v1alpha1.Device)
 	if !ok {
@@ -281,9 +293,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	res, err := c.service.S4tClient.CreateBoard(board)
-	// log.Printf("\n\n####ERROR-LOG#### %s\n\n", res)
 	if err != nil {
-		// log.Printf("\n\n####ERROR-LOG#### %s\n\n", res)
 		log.Printf("####ERROR-LOG####  Error s4t client Board Create %q", err)
 		return managed.ExternalCreation{}, errors.New(errNewClient)
 	}
@@ -295,8 +305,6 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	cr.Spec.ForProvider.Session = res.Session
 
 	return managed.ExternalCreation{
-		// Optionally return any details that may be required to connect to the
-		// external resource. These will be stored as the connection secret.
 		ConnectionDetails: managed.ConnectionDetails{},
 	}, err
 }

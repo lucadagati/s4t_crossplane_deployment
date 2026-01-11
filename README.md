@@ -69,6 +69,8 @@ s4t-crossplane-deployment/
 - Device CRD (for managing boards)
 - Plugin CRD (for managing plugins)
 - Service CRD (for managing services)
+- BoardPluginInjection CRD (for injecting plugins into boards) ✅ Tested
+- BoardServiceInjection CRD (for exposing services on boards) ✅ Tested
 
 ## Notes
 

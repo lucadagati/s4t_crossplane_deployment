@@ -193,7 +193,37 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errNotBoardPluginInjection)
 	}
 	fmt.Printf("Observing BoardPluginInjection: %+v", cr)
-	// TODO: Implement actual observation
+	
+	// Verify that the plugin is actually injected by checking the board's plugins
+	plugins, err := c.service.S4tClient.GetBoardPlugins(cr.Spec.ForProvider.BoardUuid)
+	if err != nil {
+		log.Printf("####ERROR-LOG#### Error s4t client GetBoardPlugins %q", err)
+		// If we can't verify, assume it exists but mark as not up-to-date
+		return managed.ExternalObservation{
+			ResourceExists:   true,
+			ResourceUpToDate: false,
+			ConnectionDetails: managed.ConnectionDetails{},
+		}, nil
+	}
+	
+	// Check if our plugin is in the list
+	found := false
+	for _, p := range plugins {
+		if p.Plugin == cr.Spec.ForProvider.PluginUuid {
+			found = true
+			break
+		}
+	}
+	
+	if !found {
+		// Plugin is not injected, resource doesn't exist yet
+		return managed.ExternalObservation{
+			ResourceExists:   false,
+			ResourceUpToDate: false,
+			ConnectionDetails: managed.ConnectionDetails{},
+		}, nil
+	}
+	
 	cr.Status.SetConditions(v1.Available())
 	return managed.ExternalObservation{
 		ResourceExists:   true,
@@ -223,12 +253,17 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	}, nil
 }
 
+// Update is a no-op for BoardPluginInjection.
+// Plugin injections cannot be updated; they must be deleted and recreated.
 func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
 	return managed.ExternalUpdate{
 		ConnectionDetails: managed.ConnectionDetails{},
 	}, nil
 }
 
+// Delete removes an injected plugin from a board via IoTronic API.
+// API: DELETE /v1/boards/{board_uuid}/plugins/{plugin_uuid}
+// Response: 204 No Content on success
 func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	cr, ok := mg.(*v1alpha1.BoardPluginInjection)
 	if !ok {

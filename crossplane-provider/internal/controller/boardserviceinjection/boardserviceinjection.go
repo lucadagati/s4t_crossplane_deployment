@@ -247,6 +247,10 @@ func (c *external) makeRESTCall(method, path string, data interface{}) (*http.Re
 	return resp, nil
 }
 
+// Observe verifies if a service is actually exposed on a board.
+// API: GET /v1/boards/{board_uuid}/services
+// Response: {"exposed": [{"service": "uuid", "public_port": 50024, ...}]}
+// Returns ResourceExists=true if the service is found in the board's exposed services list.
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
 	cr, ok := mg.(*v1alpha1.BoardServiceInjection)
 	if !ok {
@@ -314,6 +318,15 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	}, nil
 }
 
+// Create exposes a service on a board via IoTronic API.
+// API: POST /v1/boards/{board_uuid}/services/{service_uuid}/action
+// Request Body: {"action": "ServiceEnable"}
+// Response: 200 OK on success
+// Prerequisites:
+//   - Board must be online (status='online', Lightning Rod connected)
+//   - Service must exist in database
+//   - Board must have an active wagent assigned
+// The service will be exposed on a random public port (typically in range 50000-50100)
 func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
 	cr, ok := mg.(*v1alpha1.BoardServiceInjection)
 	if !ok {
@@ -348,12 +361,18 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	}, nil
 }
 
+// Update is a no-op for BoardServiceInjection.
+// Service exposures cannot be updated; they must be deleted and recreated.
 func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
 	return managed.ExternalUpdate{
 		ConnectionDetails: managed.ConnectionDetails{},
 	}, nil
 }
 
+// Delete removes an exposed service from a board via IoTronic API.
+// API: POST /v1/boards/{board_uuid}/services/{service_uuid}/action
+// Request Body: {"action": "ServiceDisable"}
+// Response: 200 OK on success
 func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	cr, ok := mg.(*v1alpha1.BoardServiceInjection)
 	if !ok {

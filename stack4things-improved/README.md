@@ -209,16 +209,143 @@ The provider is automatically built and installed during deployment. It provides
 ### Provider Configuration
 
 The provider requires a ProviderConfig that specifies:
-- IoTronic API endpoint
-- Keystone authentication endpoint
-- Credentials for API access
+- IoTronic API endpoint (FQDN: `http://iotronic-conductor.default.svc.cluster.local:8812/v1`)
+- Keystone authentication endpoint (FQDN: `http://keystone.default.svc.cluster.local:5000/v3`)
+- Credentials for API access (stored in Secret)
 
-The deployment script automatically creates the ProviderConfig. To verify:
+The deployment script automatically creates two ProviderConfigs:
+- `s4t-provider-config`: For IoTronic API operations
+- `s4t-provider-domain`: For Keystone authentication
+
+Both use the same Secret (`s4t-credentials`) containing:
+- Keystone username and password
+- Project domain and user domain information
+
+#### Provider Configuration Flow
+
+```mermaid
+sequenceDiagram
+    participant Script as deploy-complete-improved.sh
+    participant K8s as Kubernetes
+    participant Prov as Provider S4T
+    participant Cond as IoTronic Conductor
+    participant KS as Keystone
+    
+    Script->>K8s: Create Secret s4t-credentials
+    K8s->>K8s: Store credentials
+    
+    Script->>K8s: Create ProviderConfig s4t-provider-config
+    Note over K8s: Endpoint: iotronic-conductor:8812/v1
+    K8s->>Prov: ProviderConfig available
+    
+    Script->>K8s: Create ProviderConfig s4t-provider-domain
+    Note over K8s: Endpoint: keystone:5000/v3
+    K8s->>Prov: ProviderConfig available
+    
+    Prov->>KS: Authenticate with credentials
+    KS-->>Prov: Token received
+    Prov->>Cond: API call with token
+    Cond-->>Prov: Response
+```
+
+To verify:
 
 ```bash
 kubectl get providerconfig -n default
 kubectl get secret s4t-credentials -n default
+kubectl describe providerconfig s4t-provider-config -n default
 ```
+
+## Architecture Overview
+
+### System Architecture
+
+The Stack4Things deployment with Crossplane integration consists of the following components:
+
+```mermaid
+graph TB
+    subgraph "Kubernetes Cluster (k3s)"
+        subgraph "Stack4Things Services"
+            DB[(MariaDB<br/>Database)]
+            KS[Keystone<br/>Authentication]
+            RMQ[RabbitMQ<br/>Message Broker]
+            CB[Crossbar<br/>WAMP Router]
+            CON[IoTronic Conductor<br/>API Server]
+            WAG[IoTronic Wagent<br/>WAMP Agent]
+            UI[IoTronic UI<br/>Dashboard]
+            CA[CA Service]
+            WST[Wstun Service]
+        end
+        
+        subgraph "Crossplane System"
+            CP[Crossplane Core<br/>Control Plane]
+            PROV[Crossplane Provider S4T<br/>Custom Provider]
+            DEV[Device CRD<br/>Board Management]
+            PLUG[Plugin CRD]
+            SVC[Service CRD]
+        end
+        
+        subgraph "IoT Boards"
+            LR1[Lightning Rod 1]
+            LR2[Lightning Rod 2]
+            LR3[Lightning Rod N]
+        end
+    end
+    
+    USER[User/Admin]
+    EXT[External Access]
+    
+    USER -->|kubectl apply| DEV
+    USER -->|Web UI| UI
+    EXT -->|HTTP/HTTPS| UI
+    EXT -->|WSS| CB
+    
+    DEV -->|Manages| PROV
+    PROV -->|Creates| CON
+    PROV -->|API Calls| CON
+    
+    CON -->|Stores| DB
+    CON -->|Auth| KS
+    CON -->|RPC| RMQ
+    CON -->|WAMP| CB
+    
+    WAG -->|WAMP| CB
+    WAG -->|RPC| RMQ
+    WAG -->|Stores| DB
+    
+    LR1 -->|WSS| CB
+    LR2 -->|WSS| CB
+    LR3 -->|WSS| CB
+    
+    CB -->|Routes| WAG
+    WAG -->|Manages| LR1
+    WAG -->|Manages| LR2
+    WAG -->|Manages| LR3
+    
+    UI -->|API| CON
+    UI -->|Displays| DB
+```
+
+### Component Interactions
+
+**Core Services:**
+- **MariaDB**: Stores all Stack4Things data (boards, plugins, services, wampagents)
+- **Keystone**: Provides authentication and authorization
+- **RabbitMQ**: Handles RPC communication between Conductor and Wagent
+- **Crossbar**: WAMP router for WebSocket communication with Lightning Rod
+- **IoTronic Conductor**: Main API server, manages boards and resources
+- **IoTronic Wagent**: WAMP agent that handles board registration and communication
+- **IoTronic UI**: Web dashboard (Horizon) for managing resources
+
+**Crossplane Integration:**
+- **Crossplane Core**: Kubernetes control plane extension
+- **Crossplane Provider S4T**: Custom provider that translates Kubernetes CRDs to IoTronic API calls
+- **Device CRD**: Kubernetes resource representing an IoT board
+- **Plugin/Service CRDs**: Kubernetes resources for managing plugins and services
+
+**Board Communication:**
+- **Lightning Rod**: Agent running on each IoT board, connects to Crossbar via WSS
+- Each Lightning Rod registers with Wagent, which manages board lifecycle
 
 ## S4T - Stack4Things Deployment
 
@@ -226,13 +353,93 @@ This guide describes how to clone, configure and start **Stack4Things** on Kuber
 
 ### Improved Deployment Script
 
-The improved deployment script (`deploy-complete-improved.sh`) automates the entire Stack4Things deployment including:
+The improved deployment script (`deploy-complete-improved.sh`) automates the entire Stack4Things deployment including **Crossplane installation and configuration**. The script performs the following steps:
 
-1. Stack4Things core services (database, Keystone, RabbitMQ, Crossbar, Conductor, Wagent, UI)
-2. Crossplane installation
-3. Crossplane Provider S4T installation
-4. Provider configuration
-5. Automatic fixes for common issues (wagent duplicates, board status, etc.)
+#### Deployment Steps
+
+1. **Prerequisites Check**
+   - Verifies K3s, Helm, MetalLB, and Istio installation
+   - Configures MetalLB IP pool if needed
+   - Sets up Istio ingress ports
+
+2. **Stack4Things Core Services**
+   - Deploys MariaDB database
+   - Deploys Keystone authentication service
+   - Deploys RabbitMQ message broker
+   - Deploys Crossbar WAMP router
+   - Deploys IoTronic Conductor (API server)
+   - Deploys IoTronic Wagent (WAMP agent)
+   - Deploys IoTronic UI (Horizon dashboard)
+   - Deploys CA Service and Wstun
+
+3. **Crossplane Installation** (Step 5)
+   - Adds Crossplane Helm repository
+   - Installs Crossplane in `crossplane-system` namespace
+   - Waits for Crossplane pods to be ready
+
+4. **Crossplane Provider S4T Installation** (Step 6)
+   - Locates crossplane-provider directory
+   - Builds provider image (if Makefile exists)
+   - Installs provider CRDs
+   - Installs provider resource via kubectl or Helm
+   - Verifies provider installation
+
+5. **Provider Configuration** (Step 7)
+   - Creates ProviderConfig with IoTronic API endpoint
+   - Creates ProviderConfig with Keystone endpoint
+   - Creates Secret with authentication credentials
+   - Configures FQDN endpoints for all services
+
+6. **Database Fixes** (Step 7.1-7.2)
+   - Fixes wagent duplicates (ensures only one `ragent=1`)
+   - Fixes board status NULL issues
+   - Updates boards to use active wagent
+
+7. **Final Verification**
+   - Checks pod status
+   - Verifies Crossplane installation
+   - Provides dashboard access information
+
+#### Deployment Sequence
+
+The following diagram shows the complete deployment process:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Script as deploy-complete-improved.sh
+    participant K8s as Kubernetes
+    participant Helm
+    participant CP as Crossplane
+    participant Prov as Provider S4T
+    participant S4T as Stack4Things Services
+    
+    User->>Script: Execute script
+    Script->>K8s: Check prerequisites
+    Script->>K8s: Deploy S4T services
+    K8s->>S4T: Start pods
+    S4T-->>Script: Services ready
+    
+    Script->>Helm: Add Crossplane repo
+    Script->>Helm: Install Crossplane
+    Helm->>K8s: Deploy Crossplane
+    K8s->>CP: Start Crossplane pods
+    CP-->>Script: Crossplane ready
+    
+    Script->>Prov: Build provider
+    Script->>K8s: Install provider CRDs
+    Script->>K8s: Install provider resource
+    K8s->>Prov: Start provider pod
+    Prov-->>Script: Provider ready
+    
+    Script->>K8s: Create ProviderConfig
+    Script->>K8s: Create Secret
+    K8s->>Prov: Configure provider
+    Prov-->>Script: Configuration complete
+    
+    Script->>K8s: Fix database issues
+    Script-->>User: Deployment complete
+```
 
 To run the deployment:
 
@@ -241,14 +448,14 @@ cd stack4things-improved
 ./deploy-complete-improved.sh
 ```
 
-The script will:
-- Check and install prerequisites (MetalLB, Istio if needed)
-- Deploy all Stack4Things components
-- Install and configure Crossplane
-- Build and install the Crossplane Provider S4T
-- Configure ProviderConfig with correct endpoints
-- Fix common database issues automatically
-- Provide dashboard access information
+The script automatically:
+- Checks and installs prerequisites (MetalLB, Istio if needed)
+- Deploys all Stack4Things components
+- **Installs and configures Crossplane** (Steps 5-7)
+- Builds and installs the Crossplane Provider S4T
+- Configures ProviderConfig with correct endpoints
+- Fixes common database issues automatically
+- Provides dashboard access information
 
 ### Manual Deployment (Legacy)
 
@@ -439,6 +646,46 @@ sudo chmod 644 /etc/rancher/k3s/k3s.yaml
 
 Crossplane enables declarative management of Stack4Things boards through Kubernetes Custom Resources. Instead of using the IoTronic API directly, you can create and manage boards using `kubectl` and YAML files.
 
+### Board Creation Flow
+
+The following sequence diagram shows how a board is created and registered through Crossplane:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant K8s as Kubernetes API
+    participant CP as Crossplane
+    participant Prov as Provider S4T
+    participant Cond as IoTronic Conductor
+    participant DB as MariaDB
+    participant WAG as Wagent
+    participant CB as Crossbar
+    participant LR as Lightning Rod
+    
+    User->>K8s: kubectl apply Device CRD
+    K8s->>CP: Device resource created
+    CP->>Prov: Reconcile Device
+    Prov->>Cond: POST /boards (create board)
+    Cond->>DB: INSERT INTO boards
+    DB-->>Cond: Board created
+    Cond-->>Prov: Board response (UUID, code)
+    Prov->>K8s: Update Device status
+    K8s-->>User: Device Ready
+    
+    Note over User,LR: Lightning Rod Deployment
+    
+    User->>K8s: Create Lightning Rod Pod
+    K8s->>LR: Start pod with settings.json
+    LR->>CB: Connect via WSS
+    CB-->>LR: Connection established
+    LR->>WAG: Call stack4things.register
+    WAG->>Cond: Register board via RPC
+    Cond->>DB: UPDATE boards SET status='online'
+    Cond-->>WAG: Registration successful
+    WAG-->>LR: Registration confirmed
+    LR->>DB: Update settings.json with UUID
+```
+
 ### Creating a Board with Crossplane
 
 Create a board by applying a Device resource:
@@ -472,6 +719,93 @@ kubectl describe device my-board -n default
 ```
 
 The board will be automatically registered in IoTronic. After creation, you need to deploy a Lightning Rod for the board (see below).
+
+### Board Registration Sequence
+
+When a Lightning Rod connects for the first time:
+
+```mermaid
+sequenceDiagram
+    participant LR as Lightning Rod
+    participant CB as Crossbar
+    participant WAG as Wagent
+    participant Cond as Conductor
+    participant DB as Database
+    participant RMQ as RabbitMQ
+    
+    LR->>CB: WSS Connect (wss://crossbar:8181/)
+    CB-->>LR: Connection established
+    CB->>WAG: Notify new session
+    LR->>WAG: Call stack4things.register(code)
+    WAG->>Cond: RPC: register_board(code)
+    Note over WAG,Cond: Via RabbitMQ RPC
+    Cond->>DB: SELECT board WHERE code=?
+    DB-->>Cond: Board found
+    Cond->>DB: UPDATE board SET agent=wagent, status='online'
+    Cond->>DB: INSERT wampagent session
+    Cond-->>RMQ: RPC Response
+    RMQ-->>WAG: Registration result
+    WAG-->>LR: Registration successful
+    WAG->>LR: Return board UUID
+    LR->>LR: Update settings.json with UUID
+    Note over LR: Board now online
+```
+
+### Crossplane Provider Workflow
+
+How Crossplane Provider S4T manages resources:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant K8s as Kubernetes
+    participant CP as Crossplane
+    participant Prov as Provider S4T
+    participant API as IoTronic API
+    participant DB as Database
+    
+    User->>K8s: Create Device CRD
+    K8s->>CP: Device resource event
+    CP->>Prov: Reconcile request
+    Prov->>API: GET /boards (check if exists)
+    API-->>Prov: Board not found
+    Prov->>API: POST /boards (create)
+    API->>DB: Create board record
+    DB-->>API: Board created
+    API-->>Prov: Board response
+    Prov->>K8s: Update Device status: Ready
+    K8s-->>User: Device Ready
+    
+    Note over User,DB: Update Flow
+    
+    User->>K8s: Update Device spec
+    K8s->>CP: Device updated
+    CP->>Prov: Reconcile update
+    Prov->>API: PUT /boards/{id}
+    API->>DB: UPDATE board
+    DB-->>API: Updated
+    API-->>Prov: Success
+    Prov->>K8s: Update status
+```
+
+### Communication Protocols
+
+**WAMP (WebSocket Application Messaging Protocol):**
+- Used for real-time communication between Lightning Rod and Crossbar
+- Protocol: WSS (WebSocket Secure)
+- Realm: `s4t`
+- Port: 8181
+
+**RPC (Remote Procedure Call):**
+- Used for communication between Wagent and Conductor
+- Transport: RabbitMQ (AMQP)
+- Pattern: Request-Reply
+- Topics: `iotronic.conductor_manager` (Conductor) and `s4t` (Wagent)
+
+**REST API:**
+- Used by Crossplane Provider to interact with IoTronic
+- Endpoint: `http://iotronic-conductor:8812/v1`
+- Authentication: Keystone tokens
 
 ### Listing Boards
 
@@ -547,6 +881,238 @@ cd stack4things-improved
 ./scripts/compile-settings-for-all-boards.sh
 ```
 
+## Creating and Managing Plugins with Crossplane
+
+Crossplane enables declarative management of Stack4Things plugins through Kubernetes Custom Resources. Plugins are Python scripts that run on IoT boards via Lightning Rod.
+
+### Plugin Structure
+
+A Stack4Things plugin must:
+- Inherit from `Plugin.Plugin` base class
+- Implement a `Worker` class with `run()` method
+- Use `oslo_log` for logging
+- Put results in `self.q_result` queue
+
+### Creating a Plugin
+
+#### Simple Example Plugin
+
+Create a simple environmental data logger plugin:
+
+```bash
+cd stack4things-improved
+./scripts/create-plugin.sh simple-environmental-logger examples/plugin-simple-example.yaml
+```
+
+Or create a plugin directly using kubectl:
+
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: iot.s4t.crossplane.io/v1alpha1
+kind: Plugin
+metadata:
+  name: my-plugin
+  namespace: default
+spec:
+  forProvider:
+    name: "My Plugin"
+    code: |
+      from iotronic_lightningrod.plugins import Plugin
+      from oslo_log import log as logging
+      import time
+      
+      LOG = logging.getLogger(__name__)
+      
+      class Worker(Plugin.Plugin):
+          def __init__(self, uuid, name, q_result, params=None):
+              super(Worker, self).__init__(uuid, name, q_result, params)
+              
+          def run(self):
+              LOG.info(f"Plugin {self.name} started")
+              LOG.info(f"Input parameters: {self.params}")
+              LOG.info("Plugin process completed!")
+              self.q_result.put("SUCCESS")
+    parameters:
+      interval: 30
+  providerConfigRef:
+    name: s4t-provider-domain
+  deletionPolicy: Delete
+EOF
+```
+
+#### Environmental Monitor Plugin
+
+A more complete example that simulates environmental monitoring:
+
+```bash
+cd stack4things-improved
+./scripts/create-plugin.sh environmental-monitor examples/plugin-environmental-monitor.yaml
+```
+
+This plugin:
+- Logs simulated environmental data (temperature, humidity, pressure, wind)
+- Runs continuously with configurable interval
+- Uses structured logging
+- Handles errors gracefully
+
+### Plugin Examples
+
+Example plugins are available in the `examples/` directory:
+
+- `plugin-simple-example.yaml`: Basic plugin template
+- `plugin-environmental-monitor.yaml`: Environmental data monitoring plugin
+
+### Injecting Plugin into a Board
+
+After creating a plugin, inject it into a board. There are two methods:
+
+#### Method 1: Using BoardPluginInjection CRD (Recommended)
+
+This method uses Crossplane CRD for declarative injection:
+
+```bash
+cd stack4things-improved
+./scripts/inject-plugin-using-crd.sh <BOARD_CODE> <PLUGIN_NAME>
+```
+
+Example:
+```bash
+./scripts/inject-plugin-using-crd.sh TEST-BOARD-1234567890-1 simple-environmental-logger
+```
+
+#### Method 2: Using Direct API Call
+
+This method directly calls the IoTronic API:
+
+```bash
+cd stack4things-improved
+./scripts/inject-plugin-to-board.sh <BOARD_CODE> <PLUGIN_NAME>
+```
+
+Example:
+```bash
+./scripts/inject-plugin-to-board.sh TEST-BOARD-1234567890-1 simple-environmental-logger
+```
+
+**Important**: The board must be **online** (Lightning Rod connected) for injection to work.
+
+### Verifying Plugins
+
+To check plugin status and injections:
+
+```bash
+cd stack4things-improved
+./scripts/verify-plugins.sh
+```
+
+This script shows:
+- Crossplane Plugin resources
+- Plugins in database
+- Injected plugins in boards
+- BoardPluginInjection CRDs
+
+### Plugin Lifecycle
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant K8s as Kubernetes
+    participant CP as Crossplane
+    participant Prov as Provider S4T
+    participant Cond as IoTronic Conductor
+    participant DB as Database
+    participant LR as Lightning Rod
+    
+    User->>K8s: kubectl apply Plugin CRD
+    K8s->>CP: Plugin resource created
+    CP->>Prov: Reconcile Plugin
+    Prov->>Cond: POST /v1/plugins
+    Cond->>DB: INSERT INTO plugins
+    DB-->>Cond: Plugin created (UUID)
+    Cond-->>Prov: Plugin response
+    Prov->>K8s: Update Plugin status: Ready
+    K8s-->>User: Plugin Ready
+    
+    Note over User,LR: Plugin Injection
+    
+    User->>Cond: POST /v1/boards/{id}/plugins/{plugin_id}
+    Cond->>DB: INSERT INTO injected_plugins
+    Cond->>LR: Inject plugin code
+    LR-->>Cond: Injection confirmed
+    Cond-->>User: Plugin injected
+    
+    Note over User,LR: Plugin Activation
+    
+    User->>Cond: POST /v1/boards/{id}/plugins/{plugin_id}/start
+    Cond->>LR: Start plugin
+    LR->>LR: Execute plugin.run()
+    LR-->>Cond: Plugin running
+    Cond-->>User: Plugin started
+```
+
+### Listing Plugins
+
+```bash
+# List Crossplane Plugin resources
+kubectl get plugin -n default
+
+# List plugins in IoTronic database
+DB_POD=$(kubectl get pod -n default -l io.kompose.service=iotronic-db -o jsonpath='{.items[0].metadata.name}')
+kubectl exec -n default "$DB_POD" -- mysql -uroot -ps4t iotronic -e "SELECT name, uuid FROM plugins;"
+```
+
+### Deleting a Plugin
+
+```bash
+kubectl delete plugin my-plugin -n default
+```
+
+This will delete the plugin from both Crossplane and IoTronic.
+
+### Plugin Development Tips
+
+1. **Use oslo_log for logging**: All logs will appear in Lightning Rod logs
+2. **Handle parameters**: Access via `self.params` dictionary
+3. **Graceful shutdown**: Check `self.running` flag in loops
+4. **Error handling**: Wrap main logic in try/except blocks
+5. **Result reporting**: Use `self.q_result.put()` to report completion status
+
+Example plugin structure:
+```python
+from iotronic_lightningrod.modules.plugins import Plugin
+from oslo_log import log as logging
+import time
+
+LOG = logging.getLogger(__name__)
+
+class Worker(Plugin.Plugin):
+    def __init__(self, uuid, name, q_result=None, params=None):
+        super(Worker, self).__init__(uuid, name, q_result, params)
+        self.interval = int(params.get('interval', 30)) if params else 30
+        
+    def run(self):
+        LOG.info(f"Plugin {self.name} started")
+        try:
+            while self._is_running:
+                # Your plugin logic here
+                LOG.info("Processing...")
+                time.sleep(self.interval)
+        except Exception as e:
+            LOG.error(f"Plugin error: {str(e)}")
+            if self.q_result:
+                self.q_result.put(f"ERROR: {str(e)}")
+        finally:
+            LOG.info("Plugin stopped")
+            if self.q_result:
+                self.q_result.put("SUCCESS")
+```
+
+**Important Notes:**
+- Use `from iotronic_lightningrod.modules.plugins import Plugin` (not `iotronic_lightningrod.plugins`)
+- Use `self._is_running` (not `self.running`) to check if plugin should continue
+- `q_result` parameter is optional in `__init__` (can be `None`)
+- Always check if `self.q_result` exists before calling `put()`
+
 ## Important Notes
 
 ### settings.json Configuration
@@ -559,15 +1125,55 @@ The `settings.json` file is automatically configured with:
 
 ### Wagent Management
 
+The Wagent (WAMP Agent) is a critical component that handles board registration and communication. The system architecture requires exactly **ONE active wagent** at any time.
+
+#### Wagent Responsibilities
+
+1. **Board Registration**: Registers new boards when Lightning Rod connects
+2. **RPC Procedure Registration**: Registers WAMP procedures for board communication
+3. **Session Management**: Manages WAMP sessions with Lightning Rod instances
+4. **Database Updates**: Updates board status and agent assignments
+
+#### Wagent Selection Process
+
+```mermaid
+sequenceDiagram
+    participant DB as Database
+    participant Cond as Conductor
+    participant WAG1 as Wagent 1
+    participant WAG2 as Wagent 2
+    participant WAG3 as Wagent 3
+    
+    Note over DB,WAG3: Multiple wagents exist
+    
+    Cond->>DB: SELECT wampagents WHERE ragent=1
+    DB-->>Cond: 3 wagents with ragent=1
+    
+    Cond->>DB: UPDATE wampagents SET ragent=0
+    DB-->>Cond: All set to 0
+    
+    Cond->>DB: SELECT most recent wagent
+    DB-->>Cond: Wagent 3 (newest)
+    
+    Cond->>DB: UPDATE wagent3 SET ragent=1, online=1
+    DB-->>Cond: Wagent 3 is now active
+    
+    WAG1->>WAG1: Detect ragent=0, stop RPC registration
+    WAG2->>WAG2: Detect ragent=0, stop RPC registration
+    WAG3->>WAG3: Detect ragent=1, register RPC procedures
+    
+    Note over WAG3: Only Wagent 3 can register procedures
+```
+
 The deployment script automatically ensures:
 - Only one wagent is set as registration agent (`ragent=1`)
 - All boards use the active wagent
-- Wagent duplicates are automatically fixed
+- Wagent duplicates are automatically fixed (Step 7.1)
 
 **Critical**: The system requires exactly ONE wagent with `ragent=1` and `online=1`. Multiple wagents with `ragent=1` will cause:
-- RPC procedure registration conflicts
-- Board connection failures
-- API errors ("unable to retrieve board list")
+- RPC procedure registration conflicts (`procedure_already_exists` errors)
+- Board connection failures (`no callee registered` errors)
+- API errors ("unable to retrieve board list" - SQL MultipleResultsFound)
 
 The deployment script (Step 7.1) automatically fixes this issue, but if you encounter problems, see "Common Issues and Fixes" section below.
 
