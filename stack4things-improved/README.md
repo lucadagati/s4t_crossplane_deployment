@@ -1,5 +1,13 @@
-# S4T Deployment
+# S4T Deployment with Crossplane, Keycloak, and RBAC
+
 This repository contains the complete deployment of Stack4Things, an open-source framework designed to address the complexities of IoT fleet management, on Kubernetes.
+
+The deployment includes:
+- **Stack4Things** core services (IoTronic Conductor, Wagent, Crossbar, Lightning Rod, UI)
+- **Crossplane** for declarative infrastructure management
+- **Keycloak** for OIDC authentication
+- **Keystone** for federated identity management
+- **RBAC Operator** for multi-tenant project isolation
 
 ## Prerequisites
 
@@ -372,6 +380,19 @@ The improved deployment script (`deploy-complete-improved.sh`) automates the ent
    - Deploys IoTronic UI (Horizon dashboard)
    - Deploys CA Service and Wstun
 
+8. **Keycloak and Keystone Deployment** (Step 8)
+   - Deploys Keycloak OIDC Identity Provider
+   - Deploys PostgreSQL for Keycloak
+   - Deploys Keystone with OIDC federation
+   - Creates ConfigMaps for Keycloak realm and certificates
+   - Creates ConfigMaps for Keystone configuration
+
+9. **RBAC Operator Deployment** (Step 9)
+   - Installs Project CRD
+   - Builds and deploys RBAC Operator
+   - Creates ServiceAccount and RBAC resources
+   - Sets up ClusterRole for project creation
+
 3. **Crossplane Installation** (Step 5)
    - Adds Crossplane Helm repository
    - Installs Crossplane in `crossplane-system` namespace
@@ -395,9 +416,11 @@ The improved deployment script (`deploy-complete-improved.sh`) automates the ent
    - Fixes board status NULL issues
    - Updates boards to use active wagent
 
-7. **Final Verification**
-   - Checks pod status
+7. **Final Verification** (Step 10)
+   - Checks pod status for all services
    - Verifies Crossplane installation
+   - Verifies Keycloak and Keystone status
+   - Verifies RBAC Operator status
    - Provides dashboard access information
 
 #### Deployment Sequence
@@ -640,6 +663,101 @@ If the file is not readable by the user you're logged in as, you can either chan
 To change the permissions so all users can read the file, you can run:
 ```
 sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+```
+
+## Authentication and Project Management
+
+### Keycloak and Keystone Integration
+
+The deployment includes Keycloak as an OIDC Identity Provider and Keystone for federated identity management:
+
+- **Keycloak**: Provides OIDC authentication for Kubernetes API server
+- **Keystone**: Federated with Keycloak, manages OpenStack-style projects and groups
+- **OIDC Groups**: Follow the convention `s4t:owner-project:role` where role can be:
+  - `admin_iot_project`: Full administrative access
+  - `manager_iot_project`: Developer/power-user access
+  - `user_iot`: Read-only access
+
+### RBAC Operator and Project CRD
+
+The RBAC Operator automatically manages project isolation:
+
+1. **Project Creation**: When a user creates a `Project` CRD:
+   ```yaml
+   apiVersion: s4t.s4t.io/v1alpha1
+   kind: Project
+   metadata:
+     name: my-project
+   spec:
+     projectName: my-project
+     owner: ""  # Auto-populated by mutating webhook
+   ```
+
+2. **Automatic Resource Creation**:
+   - Dedicated namespace for the project
+   - Project-level Roles (admin, manager, user)
+   - RoleBindings based on OIDC groups
+   - Keystone authentication Secret
+
+3. **Group-Based Access**: Users are granted access based on their OIDC group membership following the `s4t:owner-project:role` pattern.
+
+### Configuring k3s for OIDC
+
+To enable OIDC authentication with Keycloak:
+
+```bash
+cd stack4things-improved
+sudo ./scripts/configure-k3s-oidc.sh
+```
+
+This configures k3s with:
+- OIDC issuer URL: `https://keycloak.keycloak.svc.cluster.local:8443/realms/stack4things`
+- Client ID: `kubernetes`
+- Username claim: `preferred_username`
+- Groups claim: `groups`
+
+### Project Management Flow
+
+The following diagram shows the complete project creation and RBAC setup flow:
+
+```mermaid
+flowchart TD
+    A[User authenticates with Keycloak] -->|1. OIDC JWT| B[Kubernetes API Server]
+    B -->|2. Validates JWT| C[Keycloak OIDC]
+    C -->|3. Returns Identity + Groups| D[User Identity]
+    D -->|4. Federates| E[Keystone Federation]
+    E -->|5. Maps Groups| F[Keystone Groups]
+    
+    G[User creates Project CRD] -->|6. kubectl apply| B
+    B -->|7. Authenticated Request| H[RBAC Operator]
+    H -->|8. Watches Project CRD| I[Project Resource]
+    I -->|9. Mutating Webhook| J[Injects Owner from JWT]
+    J -->|10. Creates| K[Project Namespace]
+    K -->|11. Creates| L[Project Roles]
+    L -->|12. admin_iot_project| M[Full Access Role]
+    L -->|13. manager_iot_project| N[Developer Role]
+    L -->|14. user_iot| O[Read-Only Role]
+    
+    M -->|15. RoleBinding| P[OIDC Group: s4t:owner-project:admin]
+    N -->|16. RoleBinding| Q[OIDC Group: s4t:owner-project:manager]
+    O -->|17. RoleBinding| R[OIDC Group: s4t:owner-project:user]
+    
+    P -->|18. Grants Access| K
+    Q -->|18. Grants Access| K
+    R -->|18. Grants Access| K
+    
+    F -->|19. Group Membership| P
+    F -->|19. Group Membership| Q
+    F -->|19. Group Membership| R
+    
+    K -->|20. Project Ready| S[User can create resources in namespace]
+    
+    style A fill:#e1f5ff
+    style C fill:#fff4e1
+    style E fill:#ffe1f5
+    style H fill:#e1ffe1
+    style K fill:#f5e1ff
+    style S fill:#e1ffe1
 ```
 
 ## Creating and Managing Boards with Crossplane

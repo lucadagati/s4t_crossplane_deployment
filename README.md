@@ -12,8 +12,6 @@ This repository contains the complete deployment of Stack4Things (S4T) integrate
 - [Deployment Flow](#deployment-flow)
 - [Board Management Flow](#board-management-flow)
 - [Plugin and Service Injection Flow](#plugin-and-service-injection-flow)
-- [Communication Protocols](#communication-protocols)
-- [Getting Help](#getting-help)
 
 ## Repository Structure
 
@@ -48,39 +46,85 @@ s4t-crossplane-deployment/
 
 ## Architecture Overview
 
-The following diagram shows the high-level architecture of Stack4Things with Crossplane integration:
+The following diagram shows the complete architecture of Stack4Things with Crossplane, Keycloak, Keystone, and RBAC Operator integration:
 
 ```mermaid
 flowchart TD
-    A[User/Operator] -->|kubectl apply| B[Crossplane CRDs]
-    B -->|Device CRD| C[Crossplane Provider S4T]
-    B -->|Plugin CRD| C
-    B -->|Service CRD| C
-    B -->|BoardPluginInjection CRD| C
-    B -->|BoardServiceInjection CRD| C
+    subgraph "User Authentication & Authorization"
+        A[User/Operator] -->|OIDC JWT Token| B[Kubernetes API Server]
+        B -->|Validates JWT| C[Keycloak OIDC Provider]
+        C -->|Issues JWT| D[User Identity + Groups]
+        D -->|Federated Identity| E[Keystone Federation]
+        E -->|Group Mapping| F[Keystone Groups]
+    end
     
-    C -->|REST API| D[IoTronic Conductor]
-    C -->|Keystone Auth| E[Keystone]
+    subgraph "Kubernetes RBAC & Project Management"
+        B -->|Authenticated Request| G[RBAC Operator]
+        G -->|Watches| H[Project CRD]
+        H -->|Creates| I[Project Namespace]
+        I -->|Creates| J[Project Roles]
+        J -->|Binds| K[RoleBindings]
+        K -->|Uses| L[OIDC Groups]
+        L -->|s4t:owner-project:role| M[Project Isolation]
+    end
     
-    D -->|RPC| F[RabbitMQ]
-    D -->|SQL| G[MariaDB]
+    subgraph "Crossplane Resource Management"
+        B -->|kubectl apply| N[Crossplane CRDs]
+        N -->|Device CRD| O[Crossplane Provider S4T]
+        N -->|Plugin CRD| O
+        N -->|Service CRD| O
+        N -->|BoardPluginInjection CRD| O
+        N -->|BoardServiceInjection CRD| O
+        N -->|Project CRD| P[Project Controller]
+        P -->|Manages| Q[Stack4Things Projects]
+    end
     
-    F -->|RPC| H[IoTronic Wagent]
-    H -->|WAMP| I[Crossbar]
+    subgraph "Stack4Things Core Services"
+        O -->|REST API| R[IoTronic Conductor]
+        O -->|Keystone Auth| E
+        R -->|RPC via| S[RabbitMQ]
+        R -->|SQL| T[MariaDB]
+        S -->|RPC| U[IoTronic Wagent]
+        U -->|WAMP| V[Crossbar WAMP Router]
+        W[Lightning Rod] -->|WSS| V
+        V -->|WAMP| U
+        R -->|API| X[IoTronic UI Dashboard]
+    end
     
-    J[Lightning Rod] -->|WSS| I
-    I -->|WAMP| H
+    subgraph "Board Lifecycle"
+        O -->|Creates Board| Y[Board in Database]
+        Y -->|Triggers| Z[Lightning Rod Deployment]
+        Z -->|Configures| AA[settings.json]
+        AA -->|Connects| V
+        V -->|Registers| U
+        U -->|Updates| Y
+        Y -->|Status: online| AB[Board Ready]
+    end
     
-    D -->|API| K[IoTronic UI Dashboard]
+    subgraph "Plugin & Service Management"
+        O -->|Creates Plugin| AC[Plugin in Database]
+        O -->|Injects Plugin| AD[BoardPluginInjection]
+        AD -->|Updates| Y
+        O -->|Exposes Service| AE[BoardServiceInjection]
+        AE -->|Updates| Y
+    end
     
-    L[Kubernetes k3s] -->|Orchestrates| M[All Services]
+    subgraph "Infrastructure Layer"
+        AF[Kubernetes k3s] -->|Orchestrates| AG[All Services]
+        AG -->|Network| AH[MetalLB LoadBalancer]
+        AG -->|Service Mesh| AI[Istio Gateway]
+        AI -->|Routes| X
+    end
     
     style A fill:#e1f5ff
-    style B fill:#fff4e1
-    style C fill:#ffe1f5
-    style D fill:#e1ffe1
-    style I fill:#f5e1ff
-    style J fill:#ffe1e1
+    style C fill:#fff4e1
+    style E fill:#ffe1f5
+    style G fill:#e1ffe1
+    style O fill:#f5e1ff
+    style R fill:#ffe1e1
+    style V fill:#e1f5ff
+    style W fill:#fff4e1
+    style X fill:#ffe1f5
 ```
 
 ## Quick Start
@@ -97,10 +141,23 @@ flowchart TD
    - Deploys all Stack4Things services
    - Installs Crossplane
    - Builds and installs the Crossplane Provider S4T
+   - Deploys Keycloak and Keystone for authentication
+   - Deploys RBAC Operator for project management
    - Configures ProviderConfig
    - Fixes common issues automatically
 
-3. **Create boards using Crossplane**:
+3. **Configure k3s for OIDC authentication** (optional, for Keycloak integration):
+   ```bash
+   cd stack4things-improved
+   sudo ./scripts/configure-k3s-oidc.sh
+   ```
+
+4. **Create S4T Projects** (for multi-tenant isolation):
+   ```bash
+   kubectl apply -f stack4things-improved/examples/project-example.yaml
+   ```
+
+5. **Create boards using Crossplane**:
    ```bash
    cd stack4things-improved
    ./scripts/create-all-boards.sh 5
@@ -145,6 +202,13 @@ flowchart TD
 - **Service CRD** - For managing services
 - **BoardPluginInjection CRD** - For injecting plugins into boards ✅ Tested
 - **BoardServiceInjection CRD** - For exposing services on boards ✅ Tested
+
+### Authentication & Authorization
+- **Keycloak** - OIDC Identity Provider for Kubernetes authentication
+- **Keystone** - OpenStack identity service, federated with Keycloak
+- **RBAC Operator** - Kubernetes operator for managing S4T Projects with namespace isolation
+- **Project CRD** - Custom resource for creating isolated project environments
+- **OIDC Groups** - Group-based RBAC following `s4t:owner-project:role` convention
 
 ## Deployment Flow
 

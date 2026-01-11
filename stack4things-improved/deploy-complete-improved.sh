@@ -453,8 +453,32 @@ EOF
     echo -e "${YELLOW}⚠️  Database pod not found, skipping wampagent fix${NC}"
   fi
 
+  # Step 7.3: Compile settings.json for all existing Lightning Rods
+  echo "🔄 Running compile-settings-for-all-boards.sh to ensure all Lightning Rods have correct settings.json..."
+  if [ -f "$SCRIPT_DIR/scripts/compile-settings-for-all-boards.sh" ]; then
+    "$SCRIPT_DIR/scripts/compile-settings-for-all-boards.sh" || echo -e "${YELLOW}⚠️  Failed to compile settings for all boards${NC}"
+  fi
+
   #################################
-  step "8" "Verifying Deployment Status"
+  step "8" "Deploying Keycloak and Keystone"
+  #################################
+  if [ -f "$SCRIPT_DIR/scripts/deploy-keycloak-keystone.sh" ]; then
+    "$SCRIPT_DIR/scripts/deploy-keycloak-keystone.sh" || echo -e "${YELLOW}⚠️  Keycloak/Keystone deployment failed, continuing...${NC}"
+  else
+    echo -e "${YELLOW}⚠️  deploy-keycloak-keystone.sh not found, skipping...${NC}"
+  fi
+
+  #################################
+  step "9" "Deploying RBAC Operator"
+  #################################
+  if [ -f "$SCRIPT_DIR/scripts/deploy-rbac-operator.sh" ]; then
+    "$SCRIPT_DIR/scripts/deploy-rbac-operator.sh" || echo -e "${YELLOW}⚠️  RBAC Operator deployment failed, continuing...${NC}"
+  else
+    echo -e "${YELLOW}⚠️  deploy-rbac-operator.sh not found, skipping...${NC}"
+  fi
+
+  #################################
+  step "10" "Verifying Deployment Status"
   #################################
   echo ""
   echo "📊 Stack4Things Pods:"
@@ -476,6 +500,15 @@ EOF
   else
     echo -e "${YELLOW}⚠️  LoadBalancer IP not yet assigned. Wait a few moments and check again.${NC}"
   fi
+  
+  echo ""
+  echo "📊 Keycloak/Keystone Status:"
+  kubectl get pods -n keycloak 2>/dev/null || echo "  (Keycloak not deployed)"
+  kubectl get pods -n keystone 2>/dev/null || echo "  (Keystone not deployed)"
+  
+  echo ""
+  echo "📊 RBAC Operator Status:"
+  kubectl get pods -n s4t-rbac-operator-system 2>/dev/null || echo "  (RBAC Operator not deployed)"
 
   echo ""
   echo -e "${GREEN}========================================${NC}"
@@ -484,13 +517,18 @@ EOF
   echo ""
   echo "Next steps:"
   echo "  1. Wait for all pods to be Running (kubectl get pods -n default)"
-  echo "  2. Create boards using Crossplane Device resources"
-  echo "  3. Create Lightning Rod for each board:"
+  echo "  2. Configure k3s for OIDC authentication (if not already done):"
+  echo "     - Add OIDC flags to k3s server args"
+  echo "     - Restart k3s service"
+  echo "  3. Create S4T Projects using Project CRD:"
+  echo "     kubectl apply -f <project.yaml>"
+  echo "  4. Create boards using Crossplane Device resources"
+  echo "  5. Create Lightning Rod for each board:"
   echo "     cd stack4things-improved"
   echo "     ./scripts/create-lightning-rod-for-board.sh <BOARD_CODE>"
-  echo "  4. Or compile settings.json for all existing boards:"
+  echo "  6. Or compile settings.json for all existing boards:"
   echo "     ./scripts/compile-settings-for-all-boards.sh"
-  echo "  5. Access the dashboard:"
+  echo "  7. Access the dashboard:"
   echo "     - Direct NodePort: http://<node-ip>:31123/horizon"
   if [ "$LB_IP" != "N/A" ]; then
     echo "     - LoadBalancer: http://$LB_IP/horizon"
@@ -499,6 +537,11 @@ EOF
   echo "Dashboard credentials:"
   echo "  Username: admin"
   echo "  Password: s4t"
+  echo ""
+  echo "Keycloak Admin Console:"
+  echo "  URL: http://<node-ip>:<nodeport>/ (port forwarded from keycloak service)"
+  echo "  Username: admin"
+  echo "  Password: admin"
   echo ""
   echo "Note: settings.json is automatically configured with:"
   echo "  - Board code (from OpenStack registration)"
