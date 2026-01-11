@@ -79,102 +79,166 @@ The system integrates four main layers:
 
 ## Architecture Overview
 
-The following diagram shows the complete architecture including authentication, authorization, and resource management:
+### High-Level Architecture
+
+The following simplified diagram shows the main components and their relationships:
 
 ```mermaid
-flowchart TD
-    subgraph "1. User Authentication Layer"
-        A[User/Operator] -->|1. Authenticates| B[Keycloak OIDC]
-        B -->|2. Issues JWT| C[JWT Token with Groups]
-        C -->|3. kubectl with JWT| D[Kubernetes API Server]
-        D -->|4. Validates JWT| B
-        D -->|5. Extracts Identity| E[User + OIDC Groups]
-        E -->|6. Federates| F[Keystone Federation]
-        F -->|7. Maps Groups| G[Keystone Groups]
+flowchart LR
+    subgraph "User Layer"
+        U[User/Operator]
     end
     
-    subgraph "2. Project Management & RBAC"
-        D -->|8. Authenticated Request| H[RBAC Operator]
-        H -->|9. Watches| I[Project CRD]
-        I -->|10. Mutating Webhook| J[Injects Owner]
-        J -->|11. Creates| K[Project Namespace]
-        K -->|12. Creates| L[Project Roles]
-        L -->|13. admin_iot_project| M[Full Access Role]
-        L -->|14. manager_iot_project| N[Developer Role]
-        L -->|15. user_iot| O[Read-Only Role]
-        M -->|16. RoleBinding| P[OIDC Group: s4t:owner-project:admin]
-        N -->|17. RoleBinding| Q[OIDC Group: s4t:owner-project:manager]
-        O -->|18. RoleBinding| R[OIDC Group: s4t:owner-project:user]
-        P -->|19. Grants Access| K
-        Q -->|19. Grants Access| K
-        R -->|19. Grants Access| K
+    subgraph "Authentication & Authorization"
+        K[Keycloak<br/>OIDC Provider]
+        KS[Keystone<br/>Identity Service]
+        RBAC[RBAC Operator]
     end
     
-    subgraph "3. Crossplane Resource Management"
-        D -->|20. kubectl apply| S[Crossplane CRDs]
-        S -->|21. Device CRD| T[Crossplane Provider S4T]
-        S -->|22. Plugin CRD| T
-        S -->|23. Service CRD| T
-        S -->|24. BoardPluginInjection| T
-        S -->|25. BoardServiceInjection| T
-        S -->|26. Project CRD| U[Project Controller]
-        U -->|27. Creates| V[Stack4Things Project]
-        V -->|28. Uses| W[Keystone Secret]
+    subgraph "Kubernetes Control Plane"
+        K8S[Kubernetes API<br/>Server]
+        CP[Crossplane<br/>Provider S4T]
     end
     
-    subgraph "4. Stack4Things Core Services"
-        T -->|29. REST API| X[IoTronic Conductor]
-        T -->|30. Keystone Auth| F
-        X -->|31. RPC| Y[RabbitMQ]
-        X -->|32. SQL| Z[MariaDB]
-        Y -->|33. RPC| AA[IoTronic Wagent]
-        AA -->|34. WAMP| AB[Crossbar]
-        AC[Lightning Rod] -->|35. WSS| AB
-        AB -->|36. WAMP| AA
-        X -->|37. API| AD[IoTronic UI Dashboard]
+    subgraph "Stack4Things Core"
+        IC[IoTronic<br/>Conductor]
+        WA[Wagent]
+        CB[Crossbar<br/>WAMP Router]
+        DB[(MariaDB)]
+        MQ[RabbitMQ]
     end
     
-    subgraph "5. Board Lifecycle Management"
-        T -->|38. Creates Board| AE[Board in Database]
-        AE -->|39. Triggers| AF[Lightning Rod Deployment]
-        AF -->|40. Configures| AG[settings.json]
-        AG -->|41. WSS URL| AB
-        AG -->|42. Board Code| AE
-        AC -->|43. Connects| AB
-        AB -->|44. Routes| AA
-        AA -->|45. Registers Board| AE
-        AE -->|46. Status: online| AH[Board Ready]
+    subgraph "IoT Devices"
+        LR[Lightning Rod<br/>Agents]
+        BD[IoT Boards]
     end
     
-    subgraph "6. Plugin & Service Injection"
-        T -->|47. Creates Plugin| AI[Plugin in Database]
-        T -->|48. BoardPluginInjection| AJ[Injection CRD]
-        AJ -->|49. PUT /boards/{uuid}/plugins/| X
-        X -->|50. Updates| AE
-        AE -->|51. Plugin Injected| AK[Plugin Available]
-        T -->|52. BoardServiceInjection| AL[Service Exposure CRD]
-        AL -->|53. POST /boards/{uuid}/services/{uuid}/action| X
-        X -->|54. Exposes Service| AM[Service with Public Port]
+    subgraph "User Interfaces"
+        UI[IoTronic UI<br/>Dashboard]
     end
     
-    subgraph "7. Infrastructure & Networking"
-        AN[Kubernetes k3s] -->|55. Orchestrates| AO[All Pods]
-        AO -->|56. LoadBalancer| AP[MetalLB]
-        AO -->|57. Service Mesh| AQ[Istio Gateway]
-        AQ -->|58. Routes Traffic| AD
-        AQ -->|59. Routes Traffic| B
-    end
+    U -->|1. Authenticate| K
+    K -->|2. JWT Token| K8S
+    K -->|3. Federate| KS
+    K8S -->|4. Authorize| RBAC
+    K8S -->|5. Apply CRDs| CP
+    CP -->|6. REST API| IC
+    CP -->|7. Auth| KS
+    IC -->|8. RPC| MQ
+    IC -->|9. SQL| DB
+    MQ -->|10. RPC| WA
+    WA -->|11. WAMP| CB
+    LR -->|12. WSS| CB
+    CB -->|13. WAMP| WA
+    IC -->|14. Web UI| UI
+    BD -->|15. Runs| LR
     
-    style A fill:#e1f5ff
-    style B fill:#fff4e1
-    style F fill:#ffe1f5
-    style H fill:#e1ffe1
-    style T fill:#f5e1ff
-    style X fill:#ffe1e1
-    style AB fill:#e1f5ff
-    style AC fill:#fff4e1
-    style AD fill:#ffe1f5
-    style K fill:#e1ffe1
+    style K fill:#fff4e1
+    style KS fill:#ffe1f5
+    style RBAC fill:#e1ffe1
+    style CP fill:#f5e1ff
+    style IC fill:#ffe1e1
+    style CB fill:#e1f5ff
+    style LR fill:#fff4e1
+    style UI fill:#ffe1f5
+```
+
+### Detailed Architecture Components
+
+#### 1. Authentication & Authorization Layer
+
+```mermaid
+flowchart LR
+    U[User] -->|1. Login| K[Keycloak]
+    K -->|2. JWT Token| K8S[K8s API]
+    K -->|3. OIDC Federation| KS[Keystone]
+    K8S -->|4. Validate| K
+    K8S -->|5. Extract Groups| RBAC[RBAC Operator]
+    RBAC -->|6. Create Namespace| NS[Project Namespace]
+    RBAC -->|7. Create Roles| R[Project Roles]
+    R -->|8. Bind Groups| NS
+    
+    style K fill:#fff4e1
+    style KS fill:#ffe1f5
+    style RBAC fill:#e1ffe1
+```
+
+**Components:**
+- **Keycloak**: OIDC Identity Provider that issues JWT tokens for Kubernetes authentication
+- **Keystone**: OpenStack identity service, federated with Keycloak via OIDC
+- **RBAC Operator**: Creates isolated namespaces and role bindings based on OIDC group membership
+
+#### 2. Resource Management Layer
+
+```mermaid
+flowchart LR
+    U[User] -->|1. kubectl apply| CRD[Device/Plugin/Service CRDs]
+    CRD -->|2. Watch| CP[Crossplane Provider]
+    CP -->|3. Authenticate| KS[Keystone]
+    CP -->|4. REST API| IC[IoTronic Conductor]
+    IC -->|5. Store| DB[(Database)]
+    IC -->|6. Notify| WA[Wagent]
+    
+    style CP fill:#f5e1ff
+    style IC fill:#ffe1e1
+    style DB fill:#e1f5ff
+```
+
+**Components:**
+- **Crossplane Provider S4T**: Translates Kubernetes CRDs to Stack4Things API calls
+- **Device CRD**: Manages IoT boards
+- **Plugin CRD**: Manages plugins
+- **Service CRD**: Manages services
+- **BoardPluginInjection/BoardServiceInjection**: Manages plugin/service injection into boards
+
+#### 3. Stack4Things Core Services
+
+```mermaid
+flowchart LR
+    IC[IoTronic Conductor] -->|RPC| MQ[RabbitMQ]
+    IC -->|SQL| DB[(MariaDB)]
+    MQ -->|RPC| WA[Wagent]
+    WA -->|WAMP| CB[Crossbar]
+    LR[Lightning Rod] -->|WSS| CB
+    CB -->|WAMP| WA
+    IC -->|Web UI| UI[Dashboard]
+    
+    style IC fill:#ffe1e1
+    style MQ fill:#fff4e1
+    style DB fill:#e1f5ff
+    style WA fill:#e1ffe1
+    style CB fill:#e1f5ff
+    style LR fill:#fff4e1
+    style UI fill:#ffe1f5
+```
+
+**Components:**
+- **IoTronic Conductor**: API server and orchestration engine
+- **IoTronic Wagent**: WAMP agent for board communication
+- **Crossbar**: WAMP router for real-time messaging
+- **Lightning Rod**: Agent running on IoT boards
+- **MariaDB**: Database for persistent storage
+- **RabbitMQ**: Message broker for RPC communication
+- **IoTronic UI**: Web dashboard for management
+
+#### 4. Board Lifecycle Management
+
+```mermaid
+flowchart LR
+    CP[Crossplane Provider] -->|1. Create Board| IC[Conductor]
+    IC -->|2. Store| DB[(Database)]
+    CP -->|3. Deploy| LR[Lightning Rod]
+    LR -->|4. Configure| SET[settings.json]
+    SET -->|5. Connect| CB[Crossbar]
+    CB -->|6. Route| WA[Wagent]
+    WA -->|7. Register| DB
+    DB -->|8. Status: online| READY[Board Ready]
+    
+    style CP fill:#f5e1ff
+    style IC fill:#ffe1e1
+    style LR fill:#fff4e1
+    style CB fill:#e1f5ff
+    style READY fill:#e1ffe1
 ```
 
 ## Quick Start
@@ -660,6 +724,7 @@ The following sequence diagram shows how project creation and RBAC setup works:
 
 ```mermaid
 sequenceDiagram
+    autonumber
     participant User
     participant Keycloak
     participant K8s as Kubernetes API
@@ -737,103 +802,128 @@ sequenceDiagram
 
 ## Deployment Flow
 
-The following diagram shows the complete deployment sequence:
+The following sequence diagram shows the complete deployment sequence:
 
 ```mermaid
-flowchart TD
-    A[Start Deployment] --> B[Install K3s]
-    B --> C[Install Helm]
-    C --> D[Install MetalLB]
-    D --> E[Install Istio]
-    E --> F[Deploy Stack4Things Services]
+sequenceDiagram
+    autonumber
+    participant Admin
+    participant K3s as Kubernetes
+    participant S4T as Stack4Things
+    participant CP as Crossplane
+    participant Auth as Auth Services
     
-    F --> G[Wait for Database]
-    G --> H[Wait for Keystone]
-    H --> I[Wait for RabbitMQ]
-    I --> J[Deploy IoTronic Services]
-    
-    J --> K[Install Crossplane]
-    K --> L[Build Provider S4T]
-    L --> M[Install Provider S4T]
-    M --> N[Configure ProviderConfig]
-    
-    N --> O[Deploy Keycloak]
-    O --> P[Deploy Keystone]
-    P --> Q[Deploy RBAC Operator]
-    
-    Q --> R[Fix Common Issues]
-    R --> S[Verify Deployment]
-    S --> T[Deployment Complete]
-    
-    style A fill:#e1f5ff
-    style T fill:#e1ffe1
-    style F fill:#fff4e1
-    style K fill:#ffe1f5
-    style O fill:#f5e1ff
+    Admin->>K3s: Install K3s, Helm, MetalLB, Istio
+    Admin->>S4T: Deploy Stack4Things Services
+    S4T->>S4T: Wait for Database
+    S4T->>S4T: Wait for Keystone
+    S4T->>S4T: Wait for RabbitMQ
+    S4T->>S4T: Deploy IoTronic Services
+    Admin->>CP: Install Crossplane
+    Admin->>CP: Build Provider S4T
+    Admin->>CP: Install Provider S4T
+    Admin->>CP: Configure ProviderConfig
+    Admin->>Auth: Deploy Keycloak
+    Admin->>Auth: Deploy Keystone
+    Admin->>Auth: Deploy RBAC Operator
+    Admin->>K3s: Fix Common Issues
+    Admin->>K3s: Verify Deployment
+    K3s-->>Admin: Deployment Complete
 ```
 
 ## Board Management Flow
 
-The following diagram shows how boards are created and managed:
+The following sequence diagram shows how boards are created and managed:
 
 ```mermaid
-flowchart TD
-    A[User creates Device CRD] --> B[Crossplane Provider receives request]
-    B --> C[Authenticate with Keystone]
-    C --> D[Call IoTronic API POST /v1/boards]
-    D --> E[Board created in database]
-    E --> F[UUID returned to Provider]
-    F --> G[Provider updates Device status]
+sequenceDiagram
+    autonumber
+    participant User
+    participant CP as Crossplane Provider
+    participant KS as Keystone
+    participant IC as IoTronic Conductor
+    participant DB as Database
+    participant LR as Lightning Rod
+    participant CB as Crossbar
+    participant WA as Wagent
     
-    G --> H[Create Lightning Rod Deployment]
-    H --> I[Configure settings.json]
-    I --> J[Lightning Rod connects to Crossbar]
-    J --> K[Board registers with Wagent]
-    K --> L[Board status: online]
-    
-    L --> M[Board ready for plugins/services]
-    
-    style A fill:#e1f5ff
-    style L fill:#e1ffe1
-    style D fill:#fff4e1
-    style J fill:#ffe1f5
+    User->>CP: Create Device CRD
+    CP->>KS: Authenticate
+    KS-->>CP: Token
+    CP->>IC: POST /v1/boards
+    IC->>DB: Store Board
+    DB-->>IC: Board UUID
+    IC-->>CP: Board Created
+    CP->>CP: Update Device Status
+    CP->>LR: Deploy Lightning Rod
+    LR->>LR: Configure settings.json
+    LR->>CB: Connect via WSS
+    CB->>WA: Route Connection
+    WA->>IC: Register Board
+    IC->>DB: Update Status: online
+    DB-->>User: Board Ready
 ```
 
 ## Plugin and Service Injection Flow
 
-The following diagram shows how plugins and services are injected into boards:
+The following sequence diagrams show how plugins and services are injected into boards:
+
+### Plugin Injection
 
 ```mermaid
-flowchart TD
-    A[User creates Plugin CRD] --> B[Crossplane Provider creates plugin]
-    B --> C[Plugin stored in database]
+sequenceDiagram
+    autonumber
+    participant User
+    participant CP as Crossplane Provider
+    participant IC as IoTronic Conductor
+    participant DB as Database
+    participant LR as Lightning Rod
     
-    D[User creates BoardPluginInjection CRD] --> E[Provider calls PUT /v1/boards/{uuid}/plugins/]
-    E --> F{Board online?}
-    F -->|Yes| G[Plugin injected successfully]
-    F -->|No| H[Injection fails - board offline]
+    User->>CP: Create Plugin CRD
+    CP->>IC: POST /v1/plugins
+    IC->>DB: Store Plugin
+    DB-->>CP: Plugin Created
+    User->>CP: Create BoardPluginInjection CRD
+    CP->>DB: Check Board Status
+    alt Board Online
+        CP->>IC: PUT /v1/boards/{uuid}/plugins/
+        IC->>DB: Update Board
+        IC->>LR: Inject Plugin
+        LR-->>IC: Plugin Injected
+        IC-->>CP: Success
+        CP-->>User: Plugin Available
+    else Board Offline
+        CP-->>User: Injection Failed - Board Offline
+    end
+```
+
+### Service Exposure
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User
+    participant CP as Crossplane Provider
+    participant IC as IoTronic Conductor
+    participant DB as Database
+    participant LR as Lightning Rod
     
-    G --> I[Plugin appears in dashboard]
-    I --> J[User can start plugin]
-    
-    K[User creates Service CRD] --> L[Crossplane Provider creates service]
-    L --> M[Service stored in database]
-    
-    N[User creates BoardServiceInjection CRD] --> O[Provider calls POST /v1/boards/{uuid}/services/{uuid}/action]
-    O --> P{Board online?}
-    P -->|Yes| Q[Service exposed with public port]
-    P -->|No| R[Exposure fails - board offline]
-    
-    Q --> S[Service accessible via public port]
-    
-    style A fill:#e1f5ff
-    style D fill:#e1f5ff
-    style K fill:#e1f5ff
-    style N fill:#e1f5ff
-    style G fill:#e1ffe1
-    style Q fill:#e1ffe1
-    style H fill:#ffe1e1
-    style R fill:#ffe1e1
+    User->>CP: Create Service CRD
+    CP->>IC: POST /v1/services
+    IC->>DB: Store Service
+    DB-->>CP: Service Created
+    User->>CP: Create BoardServiceInjection CRD
+    CP->>DB: Check Board Status
+    alt Board Online
+        CP->>IC: POST /v1/boards/{uuid}/services/{uuid}/action
+        IC->>DB: Update Board
+        IC->>LR: Expose Service
+        LR-->>IC: Service Exposed (Public Port)
+        IC-->>CP: Success
+        CP-->>User: Service Accessible
+    else Board Offline
+        CP-->>User: Exposure Failed - Board Offline
+    end
 ```
 
 ## Communication Protocols
