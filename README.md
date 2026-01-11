@@ -200,8 +200,8 @@ flowchart TD
 - **Device CRD** - For managing boards
 - **Plugin CRD** - For managing plugins
 - **Service CRD** - For managing services
-- **BoardPluginInjection CRD** - For injecting plugins into boards ✅ Tested
-- **BoardServiceInjection CRD** - For exposing services on boards ✅ Tested
+- **BoardPluginInjection CRD** - For injecting plugins into boards Tested
+- **BoardServiceInjection CRD** - For exposing services on boards Tested
 
 ### Authentication & Authorization
 - **Keycloak** - OIDC Identity Provider for Kubernetes authentication
