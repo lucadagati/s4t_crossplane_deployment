@@ -1,0 +1,3 @@
+[submodule "stack4things-improved/rbac-operator"]
+	path = stack4things-improved/rbac-operator
+	url = https://github.com/fratrung/s4t-rbac-operator.git

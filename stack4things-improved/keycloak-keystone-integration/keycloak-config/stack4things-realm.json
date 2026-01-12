@@ -32,10 +32,8 @@
       "publicClient": false,
       "secret": "6OWR6HQAqfWQ2AES8S3uSsW3O52Mw4RJ",
 
-      "redirectUris": [
-        "http://localhost:5000/v3/auth/OS-FEDERATION/websso/mapped/redirect"
-      ],
-      "webOrigins": [],
+      "redirectUris": ["http://keystone.keystone.svc.cluster.local:5000/v3/auth/OS-FEDERATION/websso/mapped/redirect"],
+      "webOrigins": ["http://keystone.keystone.svc.cluster.local:5000"],
 
       "standardFlowEnabled": true,
       "implicitFlowEnabled": false,
@@ -96,22 +94,9 @@
 
       "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": false,
-      "redirectUris": [
-        "http://localhost:8000/*",
-        "http://127.0.0.1:8000/*",
-        "http://localhost:18000/*",
-        "http://127.0.0.1:18000/*"
-      ],
-      
-      "webOrigins": [
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "http://localhost:18000",
-        "http://127.0.0.1:18000"
-      ],
-
+      "redirectUris": ["https://kubernetes.default.svc.cluster.local"],
+      "webOrigins": ["https://kubernetes.default.svc.cluster.local"],
       "fullScopeAllowed": true,
-
       "protocolMappers": [
         {
           "name": "groups",

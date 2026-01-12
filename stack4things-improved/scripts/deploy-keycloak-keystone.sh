@@ -69,10 +69,18 @@ if [ ! -f "$KEYCLOAK_CERTS_DIR/keycloak.crt" ] || [ ! -f "$KEYCLOAK_CERTS_DIR/ke
 fi
 
 kubectl create namespace keycloak --dry-run=client -o yaml | kubectl apply -f -
-kubectl create configmap keycloak-certs -n keycloak \
-    --from-file="$KEYCLOAK_CERTS_DIR/keycloak.crt" \
-    --from-file="$KEYCLOAK_CERTS_DIR/keycloak.key" \
+
+# (fratrung): Gestione delle chiavi via Secret ( più sicuro )
+kubectl create secret tls keycloak-certs -n keycloak \
+    --cert="$KEYCLOAK_CERTS_DIR/keycloak.crt" \
+    --key="$KEYCLOAK_CERTS_DIR/keycloak.key" \
     --dry-run=client -o yaml | kubectl apply -f -
+
+#kubectl create configmap keycloak-certs -n keycloak \
+#    --from-file="$KEYCLOAK_CERTS_DIR/keycloak.crt" \
+#    --from-file="$KEYCLOAK_CERTS_DIR/keycloak.key" \
+#    --dry-run=client -o yaml | kubectl apply -f -
+
 kubectl create configmap keycloak-realm-config -n keycloak \
     --from-file=stack4things-realm.json="$KEYCLOAK_REALM_FILE" \
     --dry-run=client -o yaml | kubectl apply -f -
