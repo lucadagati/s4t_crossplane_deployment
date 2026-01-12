@@ -11,6 +11,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 RBAC_OPERATOR_DIR="$BASE_DIR/rbac-operator"
 
+# Controllo se la directory del sottomodulo è vuota o inesistente
+if [ ! -d "$RBAC_OPERATOR_DIR" ] || [ -z "$(ls -A "$RBAC_OPERATOR_DIR")" ]; then
+    echo -e "${YELLOW} Sottomodulo non trovato o vuoto. Inizializzazione in corso...${NC}"
+    
+    # Esegue il comando dalla root del repository
+    git -C "$BASE_DIR" submodule update --init --recursive
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Sottomoduli inizializzati con successo.${NC}"
+    else
+        echo -e "${RED}ERRORE: Impossibile inizializzare i sottomoduli.${NC}"
+        exit 1
+    fi
+else
+    echo -e "${GREEN}Sottomodulo RBAC Operator già presente.${NC}"
+fi
+
 echo ""
 echo "=========================================="
 echo "  DEPLOYMENT RBAC OPERATOR"

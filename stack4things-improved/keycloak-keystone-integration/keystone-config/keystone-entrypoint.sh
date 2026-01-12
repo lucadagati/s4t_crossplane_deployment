@@ -19,9 +19,9 @@ if [ ! -f "$MARKER_FILE" ]; then
 
   echo ">>> keystone-manage bootstrap"
   keystone-manage bootstrap --bootstrap-password admin \
-    --bootstrap-admin-url http://localhost:5000/v3/ \
-    --bootstrap-internal-url http://localhost:5000/v3/ \
-    --bootstrap-public-url http://localhost:5000/v3/ \
+    --bootstrap-admin-url http://keystone.default.svc.cluster.local:5000/v3/ \
+    --bootstrap-internal-url http://keystone.default.svc.cluster.local:5000/v3/ \
+    --bootstrap-public-url http://keystone.default.svc.cluster.local:5000/v3/ \
     --bootstrap-region-id RegionOne
 
   echo ">>> chown -R keystone:keystone /etc/keystone"
@@ -33,8 +33,8 @@ if [ ! -f "$MARKER_FILE" ]; then
   apache2ctl -DFOREGROUND &
   APACHE_PID=$!
 
-  echo ">>> Attendo che Keystone risponda su http://localhost:5000/v3/..."
-  until curl -sf http://localhost:5000/v3/ >/dev/null 2>&1; do
+  echo ">>> Attendo che Keystone risponda su http://keystone.default.svc.cluster.local:5000/v3/..."
+  until curl -sf http://keystone.default.svc.cluster.local:5000/v3/ >/dev/null 2>&1; do
     echo "   ...ancora non pronto, riprovo tra 3s"
     sleep 3
   done
@@ -46,7 +46,7 @@ if [ ! -f "$MARKER_FILE" ]; then
   export OS_PROJECT_NAME=admin
   export OS_USER_DOMAIN_NAME=Default
   export OS_PROJECT_DOMAIN_NAME=Default
-  export OS_AUTH_URL=http://localhost:5000/v3
+  export OS_AUTH_URL=http://keystone.default.svc.cluster.local:5000/v3
   export OS_IDENTITY_API_VERSION=3
   export OS_AUTH_TYPE=password
   export OS_REGION_NAME=RegionOne
@@ -140,7 +140,7 @@ if [ ! -f "$MARKER_FILE" ]; then
 
   # IdP + mapping + protocol
   openstack identity provider create keycloak \
-    --remote-id https://host.k3d.internal:8443/realms/stack4things || true
+    --remote-id https://keycloak.keycloak.svc.cluster.local:8443/realms/stack4things || true
 
   openstack mapping create keycloak_mapping \
     --rules /etc/keystone/keystone-mapping.json || true
