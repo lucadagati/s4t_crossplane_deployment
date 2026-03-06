@@ -145,6 +145,47 @@ EOF
 
   echo -e "${GREEN}✔ Istio installed and ready.${NC}"
 
+
+
+  #################################
+  step "2.5" "Preparazione ConfigMap e Namespace per Keycloak/Keystone"
+  #################################
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  KEYCLOAK_CERTS_DIR="$SCRIPT_DIR/keycloak-keystone-integration/keycloak-config/certs"
+  KEYCLOAK_REALM_FILE="$SCRIPT_DIR/keycloak-keystone-integration/keycloak-config/stack4things-realm.json"
+  KEYSTONE_CONFIG_DIR="$SCRIPT_DIR/keycloak-keystone-integration/keystone-config"
+
+  # Crea i namespace
+  kubectl create namespace keycloak --dry-run=client -o yaml | kubectl apply -f -
+  kubectl create namespace keystone --dry-run=client -o yaml | kubectl apply -f -
+
+  # Genera certificati Keycloak se non esistono
+  if [ ! -f "$KEYCLOAK_CERTS_DIR/keycloak.crt" ]; then
+      echo "🔧 Generazione certificati Keycloak..."
+      mkdir -p "$KEYCLOAK_CERTS_DIR"
+      openssl req -x509 -newkey rsa:4096 -keyout "$KEYCLOAK_CERTS_DIR/keycloak.key" \
+          -out "$KEYCLOAK_CERTS_DIR/keycloak.crt" -days 365 -nodes \
+          -subj "/CN=keycloak.keycloak.svc.cluster.local" \
+          -addext "subjectAltName=DNS:keycloak,DNS:keycloak.keycloak,DNS:keycloak.keycloak.svc.cluster.local" 2>/dev/null || touch "$KEYCLOAK_CERTS_DIR/keycloak.crt" "$KEYCLOAK_CERTS_DIR/keycloak.key"
+  fi
+
+  # Crea i ConfigMap per Keycloak
+  echo "📦 Creazione ConfigMap per Keycloak..."
+  kubectl create configmap keycloak-certs -n keycloak --from-file="$KEYCLOAK_CERTS_DIR/keycloak.crt" --from-file="$KEYCLOAK_CERTS_DIR/keycloak.key" --dry-run=client -o yaml | kubectl apply -f -
+  if [ -f "$KEYCLOAK_REALM_FILE" ]; then
+      kubectl create configmap keycloak-realm-config -n keycloak --from-file=stack4things-realm.json="$KEYCLOAK_REALM_FILE" --dry-run=client -o yaml | kubectl apply -f -
+  fi
+
+  # Crea i ConfigMap per Keystone
+  echo "📦 Creazione ConfigMap per Keystone..."
+  if [ -d "$KEYSTONE_CONFIG_DIR" ]; then
+      kubectl create configmap keystone-config -n keystone --from-file="$KEYSTONE_CONFIG_DIR/keystone.conf" --dry-run=client -o yaml | kubectl apply -f -
+      kubectl create configmap keystone-mapping -n keystone --from-file="$KEYSTONE_CONFIG_DIR/keystone-mapping.json" --dry-run=client -o yaml | kubectl apply -f -
+      kubectl create configmap keystone-sso -n keystone --from-file="$KEYSTONE_CONFIG_DIR/sso_callback.html" --dry-run=client -o yaml | kubectl apply -f -
+      kubectl create configmap keystone-wsgi -n keystone --from-file="$KEYSTONE_CONFIG_DIR/wsgi-keystone.conf" --dry-run=client -o yaml | kubectl apply -f -
+  fi
+  echo -e "${GREEN}✔ Ambiente Keycloak/Keystone preparato correttamente.${NC}"
+
   #################################
   step "3" "Deploying Stack4Things Core Services"
   #################################
@@ -156,7 +197,7 @@ EOF
   echo "  Waiting for database..."
   kubectl wait --for=condition=ready pod -l io.kompose.service=iotronic-db -n default --timeout=120s || true
   echo "  Waiting for keystone..."
-  kubectl wait --for=condition=ready pod -l io.kompose.service=keystone -n default --timeout=120s || true
+  kubectl wait --for=condition=ready pod -l io.kompose.service=keystone -n keystone --timeout=120s || true
   echo "  Waiting for rabbitmq..."
   kubectl wait --for=condition=ready pod -l io.kompose.service=rabbitmq -n default --timeout=120s || true
   sleep 10  # Additional buffer
@@ -325,15 +366,15 @@ EOF
   # Wait for services to be ready
   echo "⏳ Waiting for IoTronic services to be ready..."
   kubectl wait --for=condition=available deployment/iotronic-conductor -n default --timeout=300s || true
-  kubectl wait --for=condition=available deployment/keystone -n default --timeout=300s || true
+  kubectl wait --for=condition=available deployment/keystone -n keystone --timeout=300s || true
   
   # Wait for conductor pod to be running
   echo "⏳ Waiting for iotronic-conductor pod to be running..."
   kubectl wait --for=condition=ready pod -l io.kompose.service=iotronic-conductor -n default --timeout=300s || true
   sleep 10  # Additional buffer for conductor to fully start
   
-  KEYSTONE_SERVICE="keystone.default.svc.cluster.local"
-  KEYSTONE_PORT=$(kubectl get svc keystone -n default -o jsonpath='{.spec.ports[0].port}' 2>/dev/null || echo "5000")
+  KEYSTONE_SERVICE="keystone.keystone.svc.cluster.local"
+  KEYSTONE_PORT=$(kubectl get svc keystone -n keystone -o jsonpath='{.spec.ports[0].port}' 2>/dev/null || echo "5000")
   IOTRONIC_SERVICE="iotronic-conductor.default.svc.cluster.local"
   IOTRONIC_PORT=$(kubectl get svc iotronic-conductor -n default -o jsonpath='{.spec.ports[0].port}' 2>/dev/null || echo "8812")
   
@@ -460,16 +501,7 @@ EOF
   fi
 
   #################################
-  step "8" "Deploying Keycloak and Keystone"
-  #################################
-  if [ -f "$SCRIPT_DIR/scripts/deploy-keycloak-keystone.sh" ]; then
-    "$SCRIPT_DIR/scripts/deploy-keycloak-keystone.sh" || echo -e "${YELLOW}⚠️  Keycloak/Keystone deployment failed, continuing...${NC}"
-  else
-    echo -e "${YELLOW}⚠️  deploy-keycloak-keystone.sh not found, skipping...${NC}"
-  fi
-
-  #################################
-  step "9" "Deploying RBAC Operator"
+  step "8" "Deploying RBAC Operator"
   #################################
   if [ -f "$SCRIPT_DIR/scripts/deploy-rbac-operator.sh" ]; then
     "$SCRIPT_DIR/scripts/deploy-rbac-operator.sh" || echo -e "${YELLOW}⚠️  RBAC Operator deployment failed, continuing...${NC}"
@@ -478,7 +510,7 @@ EOF
   fi
 
   #################################
-  step "10" "Verifying Deployment Status"
+  step "9" "Verifying Deployment Status"
   #################################
   echo ""
   echo "📊 Stack4Things Pods:"

@@ -19,13 +19,13 @@ if [ ! -f "$MARKER_FILE" ]; then
 
   echo ">>> keystone-manage bootstrap"
   keystone-manage bootstrap --bootstrap-password admin \
-    --bootstrap-admin-url http://localhost:5000/v3/ \
-    --bootstrap-internal-url http://localhost:5000/v3/ \
-    --bootstrap-public-url http://localhost:5000/v3/ \
+    --bootstrap-admin-url http://keystone.default.svc.cluster.local:5000/v3/ \
+    --bootstrap-internal-url http://keystone.default.svc.cluster.local:5000/v3/ \
+    --bootstrap-public-url http://keystone.default.svc.cluster.local:5000/v3/ \
     --bootstrap-region-id RegionOne
 
   echo ">>> chown -R keystone:keystone /etc/keystone"
-  chown -R keystone:keystone /etc/keystone
+  chown -R keystone:keystone /etc/keystone || true
 
   echo ">>> Fase 2 completata"
 
@@ -84,6 +84,11 @@ if [ ! -f "$MARKER_FILE" ]; then
 
   openstack service create iot \
     --name Iotronic || true
+    
+  echo '[INFO] Creazione degli endpoint Iotronic...'
+  openstack endpoint create --region RegionOne iot public http://iotronic-conductor.default.svc.cluster.local:8812 || true
+  openstack endpoint create --region RegionOne iot internal http://iotronic-conductor.default.svc.cluster.local:8812 || true
+  openstack endpoint create --region RegionOne iot admin http://iotronic-conductor.default.svc.cluster.local:8812 || true
 
   echo '[INFO] Iotronic User Create...'
   openstack user create iotronic \

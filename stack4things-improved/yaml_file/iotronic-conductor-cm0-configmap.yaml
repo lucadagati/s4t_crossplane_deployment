@@ -34,11 +34,11 @@ data:
 
 
     [database]
-    connection = mysql+pymysql://iotronic:unime@iotronic-db/iotronic
+    connection = mysql+pymysql://iotronic:s4t@iotronic-db.default.svc.cluster.local/iotronic
 
     [keystone_authtoken]
-    www_authenticate_uri = http://keystone:5000
-    auth_url = http://keystone:5000
+    www_authenticate_uri = http://keystone.keystone.svc.cluster.local:5000
+    auth_url = http://keystone.keystone.svc.cluster.local:5000
     auth_plugin = password
     auth_type = password
     project_domain_id = default

@@ -68,7 +68,7 @@ spec:
             - name: DB_HOST
               value: iotronic-db
             - name: IOTRONIC_DBPASS
-              value: unime
+              value: s4t
             - name: IOTRONIC_DB_NAME
               value: iotronic
             - name: IOTRONIC_DB_USER

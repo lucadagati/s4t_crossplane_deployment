@@ -2,11 +2,16 @@
 
 set -euo pipefail
 
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
 echo ""
-echo "==========================================================="
-echo " UNINSTALLING Stack4Things + K3s + Istio + MetalLB"
-echo "This will delete all Kubernetes resources and tools"
-echo "==========================================================="
+echo -e "${YELLOW}===========================================================${NC}"
+echo -e "${RED} UNINSTALLING Stack4Things + K3s + Istio + MetalLB + Crossplane${NC}"
+echo -e "${YELLOW} This will delete all Kubernetes resources and tools${NC}"
+echo -e "${YELLOW}===========================================================${NC}"
 
 read -p " Do you want to proceed? [y/N]: " CONFIRM
 if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
@@ -16,56 +21,85 @@ fi
 
 ### Step 1: Delete Stack4Things manifests ###
 echo ""
-echo " Removing Stack4Things manifests (if present)..."
-if [ -d "Stack4Things_k3s_deployment" ]; then
-    kubectl delete -f Stack4Things_k3s_deployment/istioconf/ || true
-    kubectl delete -f Stack4Things_k3s_deployment/yaml_file/ || true
-    rm -rf Stack4Things_k3s_deployment
-    echo "✔ Stack4Things removed."
-else
-    echo " Stack4Things repo not found. Skipping..."
+echo "📦 Removing Stack4Things core manifests..."
+if [ -d "istioconf" ]; then
+    kubectl delete -f istioconf/ --ignore-not-found=true || true
+fi
+if [ -d "yaml_file" ]; then
+    kubectl delete -f yaml_file/ --ignore-not-found=true || true
 fi
 
-### Step 2: Uninstall Istio ###
+echo "🧹 Cleaning up Keycloak and Keystone namespaces..."
+kubectl delete namespace keystone keycloak --ignore-not-found=true || true
+
+echo -e "${GREEN}✔ Stack4Things core removed.${NC}"
+
+
+### Step 2: Uninstall Crossplane ###
 echo ""
-echo " Uninstalling Istio..."
-helm uninstall istio-ingress -n istio-ingress || true
-helm uninstall istiod -n istio-system || true
-helm uninstall istio-base -n istio-system || true
+echo "⚙️ Uninstalling Crossplane..."
+if command -v helm &>/dev/null; then
+    helm uninstall crossplane -n crossplane-system || true
+fi
+kubectl delete namespace crossplane-system --ignore-not-found=true || true
+echo -e "${GREEN}✔ Crossplane removed.${NC}"
 
-kubectl delete namespace istio-system || true
-kubectl delete namespace istio-ingress || true
 
-### Step 3: Uninstall MetalLB ###
+### Step 3: Uninstall Istio ###
 echo ""
-echo " Removing MetalLB..."
-kubectl delete -f metallb-config.yaml || true
-kubectl delete -f https://raw.githubusercontent.com/metallb/metallb/v0.13.10/config/manifests/metallb-native.yaml || true
-kubectl delete namespace metallb-system || true
+echo "🕸️ Uninstalling Istio..."
+if command -v helm &>/dev/null; then
+    helm uninstall istio-ingress -n istio-ingress || true
+    helm uninstall istiod -n istio-system || true
+    helm uninstall istio-base -n istio-system || true
+fi
+kubectl delete namespace istio-system istio-ingress --ignore-not-found=true || true
+echo -e "${GREEN}✔ Istio removed.${NC}"
 
-### Step 4: Delete Helm binary (optional) ###
+
+### Step 4: Uninstall MetalLB ###
+echo ""
+echo "🌐 Removing MetalLB..."
+if [ -f "metalLB/metallb-config.yaml" ]; then
+    kubectl delete -f metalLB/metallb-config.yaml --ignore-not-found=true || true
+fi
+kubectl delete -f https://raw.githubusercontent.com/metallb/metallb/v0.13.10/config/manifests/metallb-native.yaml --ignore-not-found=true || true
+kubectl delete namespace metallb-system --ignore-not-found=true || true
+echo -e "${GREEN}✔ MetalLB removed.${NC}"
+
+
+### Step 5: Delete Helm binary (optional) ###
+echo ""
 if command -v helm &>/dev/null; then
     read -p " Do you want to remove Helm from this system? [y/N]: " REMOVE_HELM
     if [[ "$REMOVE_HELM" == "y" || "$REMOVE_HELM" == "Y" ]]; then
         sudo rm -f /usr/local/bin/helm
-        echo "✔ Helm binary removed."
+        echo -e "${GREEN}✔ Helm binary removed.${NC}"
     fi
 fi
 
-### Step 5: Stop and uninstall K3s ###
+
+### Step 6: Stop and uninstall K3s ###
 echo ""
-echo " Uninstalling K3s and wiping Kubernetes data..."
+echo "🔥 Uninstalling K3s and wiping Kubernetes data..."
 if command -v k3s-uninstall.sh &>/dev/null; then
     sudo /usr/local/bin/k3s-uninstall.sh
-    echo "✔ K3s removed."
+    echo -e "${GREEN}✔ K3s removed.${NC}"
 else
-    echo " k3s-uninstall.sh not found. Manual uninstall may be needed."
+    echo -e "${YELLOW}⚠️ k3s-uninstall.sh not found. If K3s is installed, manual uninstall may be needed.${NC}"
 fi
 
-### Step 6: Clean up local files ###
+
+### Step 7: Clean up local files ###
 echo ""
-echo " Cleaning up local files..."
-rm -f get_helm.sh metallb-config.yaml
+echo "🗑️ Cleaning up generated local files..."
+rm -f get_helm.sh
+rm -rf metalLB/
+rm -f /tmp/s4t-credentials.json
+rm -f /tmp/s4t-provider-config.yaml
+rm -f /tmp/s4t-provider-domain.yaml
 
 echo ""
-echo " Uninstallation complete! Your system has been cleaned."
+echo -e "${GREEN}===========================================================${NC}"
+echo -e "${GREEN}✅ Uninstallation complete! Your system has been cleaned.${NC}"
+echo -e "${GREEN}===========================================================${NC}"

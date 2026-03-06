@@ -52,7 +52,7 @@ spec:
               echo "MariaDB è pronto. Verifica database..."
 
               if mysql -uroot -p${MYSQL_ROOT_PASSWORD} -e "USE ${MYSQL_DATABASE};" 2>/dev/null; then
-                  echo "Il database 'unime' esiste già."
+                  echo "Il database 'iotronic' esiste già."
               else
                   echo "Creazione del database e dell'utente..."
                   mysql -uroot -p${MYSQL_ROOT_PASSWORD} <<EOF
@@ -74,13 +74,13 @@ spec:
             - -c
           env:
             - name: MYSQL_DATABASE
-              value: unime
+              value: iotronic
             - name: MYSQL_PASSWORD
               value: s4t
             - name: MYSQL_ROOT_PASSWORD
-              value: unime
+              value: s4t
             - name: MYSQL_USER
-              value: admin
+              value: iotronic
           image: mariadb:focal
           livenessProbe:
             exec:
@@ -91,7 +91,7 @@ spec:
                 - localhost
                 - -u
                 - root
-                - -punime
+                - -ps4t
             failureThreshold: 5
             initialDelaySeconds: 40
             periodSeconds: 10

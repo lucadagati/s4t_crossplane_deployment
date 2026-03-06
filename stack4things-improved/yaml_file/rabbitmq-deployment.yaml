@@ -25,7 +25,7 @@ spec:
       containers:
         - env:
             - name: RABBITMQ_DEFAULT_PASS
-              value: unime
+              value: s4t
             - name: RABBITMQ_DEFAULT_USER
               value: openstack
           image: rabbitmq:3.7-management
@@ -35,6 +35,17 @@ spec:
               protocol: TCP
             - containerPort: 15672
               protocol: TCP
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - >
+                    sleep 15 &&
+                    rabbitmqctl add_user admin s4t || true &&
+                    rabbitmqctl set_user_tags admin administrator || true &&
+                    rabbitmqctl set_permissions -p / admin ".*" ".*" ".*" || true
           volumeMounts:
             - mountPath: /var/lib/rabbitmq
               name: rabbitmq-data

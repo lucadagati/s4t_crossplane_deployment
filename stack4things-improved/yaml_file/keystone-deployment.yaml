@@ -83,7 +83,7 @@ spec:
     spec:
       containers:
       - name: keystone
-        image: lucadagati/iotronic-keystone:latest
+        image: salvospina/iotronic-keystone:federation
         imagePullPolicy: IfNotPresent
         command: ["/usr/local/bin/keystone-entrypoint.sh"]
         ports:

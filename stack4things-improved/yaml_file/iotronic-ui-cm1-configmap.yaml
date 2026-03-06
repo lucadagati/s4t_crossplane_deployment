@@ -41,6 +41,8 @@ data:
     # https://docs.djangoproject.com/en/dev/ref/settings/#allowed-hosts
     ALLOWED_HOSTS = ['*', ]
 
+    SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
+
     # Set SSL proxy settings:
     # Pass this header from the proxy after terminating the SSL,
     # and don't forget to strip it from the client's request.
@@ -186,7 +188,7 @@ data:
     #    ('http://cluster2.example.com:5000/v3', 'cluster2'),
     #]
 
-    OPENSTACK_HOST = "keystone"
+    OPENSTACK_HOST = "keystone.keystone.svc.cluster.local"
     OPENSTACK_KEYSTONE_URL = "http://%s:5000/v3" % OPENSTACK_HOST
     OPENSTACK_KEYSTONE_DEFAULT_ROLE = "admin"
 
@@ -200,11 +202,11 @@ data:
     #}
 
     # Enables keystone web single-sign-on if set to True.
-    #WEBSSO_ENABLED = False
+    WEBSSO_ENABLED = True
 
     # Authentication mechanism to be selected as default.
     # The value must be a key from WEBSSO_CHOICES.
-    #WEBSSO_INITIAL_CHOICE = "credentials"
+    WEBSSO_INITIAL_CHOICE = "credentials"
 
     # The list of authentication mechanisms which include keystone
     # federation protocols and identity provider/federation protocol
@@ -214,13 +216,10 @@ data:
     # Do not remove the mandatory credentials mechanism.
     # Note: The last two tuples are sample mapping keys to a identity provider
     # and federation protocol combination (WEBSSO_IDP_MAPPING).
-    #WEBSSO_CHOICES = (
-    #    ("credentials", _("Keystone Credentials")),
-    #    ("oidc", _("OpenID Connect")),
-    #    ("saml2", _("Security Assertion Markup Language")),
-    #    ("acme_oidc", "ACME - OpenID Connect"),
-    #    ("acme_saml2", "ACME - SAML2"),
-    #)
+    WEBSSO_CHOICES = (
+        ("credentials", "Keystone Credentials"),
+        ("mapped", "Keycloak Login"),
+    )
 
     # A dictionary of specific identity provider and federation protocol
     # combinations. From the selected authentication mechanism, the value
