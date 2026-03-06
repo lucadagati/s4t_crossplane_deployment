@@ -30,7 +30,7 @@ echo ""
 echo "2. Plugin nel database:"
 DB_POD=$(kubectl get pod -n default -l io.kompose.service=iotronic-db -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 if [ -n "$DB_POD" ]; then
-    kubectl exec -n default "$DB_POD" -- mysql -uroot -ps4t iotronic -e "SELECT uuid, name, code FROM plugins LIMIT 10;" 2>/dev/null || echo "  Errore accesso database"
+    kubectl exec -n default "$DB_POD" -- mysql -h127.0.0.1 -uiotronic -punime iotronic -e "SELECT uuid, name FROM plugins LIMIT 10;" 2>/dev/null || echo "  Errore accesso database"
 else
     echo "  Database pod non trovato"
 fi
@@ -38,15 +38,17 @@ echo ""
 
 echo "3. Plugin iniettati nelle board:"
 if [ -n "$DB_POD" ]; then
-    kubectl exec -n default "$DB_POD" -- mysql -uroot -ps4t iotronic -e "
+    kubectl exec -n default "$DB_POD" -- mysql -h127.0.0.1 -uiotronic -punime iotronic -e "
         SELECT 
             b.name as board_name,
             b.code as board_code,
             p.name as plugin_name,
-            ip.plugin as plugin_uuid
-        FROM injected_plugins ip
-        JOIN boards b ON ip.board = b.uuid
-        JOIN plugins p ON ip.plugin = p.uuid
+            ip.plugin_uuid,
+            ip.status,
+            ip.onboot
+        FROM injection_plugins ip
+        JOIN boards b ON ip.board_uuid = b.uuid
+        JOIN plugins p ON ip.plugin_uuid = p.uuid
         LIMIT 10;
     " 2>/dev/null || echo "  Nessun plugin iniettato o errore query"
 else

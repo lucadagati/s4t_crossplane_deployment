@@ -80,7 +80,7 @@ fi
 # Step 2: Inietta plugin
 echo ""
 echo "STEP 2: Iniezione plugin nella board..."
-./scripts/inject-plugin-using-crd.sh "$BOARD_CODE" "$PLUGIN_NAME"
+"$SCRIPT_DIR/inject-plugin-using-crd.sh" "$BOARD_CODE" "$PLUGIN_NAME"
 
 echo ""
 echo "Attesa iniezione (10 secondi)..."

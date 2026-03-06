@@ -198,9 +198,9 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	plugins, err := c.service.S4tClient.GetBoardPlugins(cr.Spec.ForProvider.BoardUuid)
 	if err != nil {
 		log.Printf("####ERROR-LOG#### Error s4t client GetBoardPlugins %q", err)
-		// If we can't verify, assume it exists but mark as not up-to-date
+		// If we can't verify, the injection doesn't exist - return false to trigger Create
 		return managed.ExternalObservation{
-			ResourceExists:   true,
+			ResourceExists:   false,
 			ResourceUpToDate: false,
 			ConnectionDetails: managed.ConnectionDetails{},
 		}, nil

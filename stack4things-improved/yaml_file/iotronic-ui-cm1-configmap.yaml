@@ -190,6 +190,12 @@ data:
     OPENSTACK_KEYSTONE_URL = "http://%s:5000/v3" % OPENSTACK_HOST
     OPENSTACK_KEYSTONE_DEFAULT_ROLE = "admin"
 
+    DEFAULT_SERVICE_REGIONS = {
+        '*': 'RegionOne',
+    }
+    OPENSTACK_ENDPOINT_TYPE = "publicURL"
+    SECONDARY_ENDPOINT_TYPE = "internalURL"
+
     # For setting the default service region on a per-endpoint basis. Note that the
     # default value for this setting is {}, and below is just an example of how it
     # should be specified.

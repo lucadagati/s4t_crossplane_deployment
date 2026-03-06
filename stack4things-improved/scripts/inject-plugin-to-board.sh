@@ -63,14 +63,17 @@ fi
 
 echo "Board UUID: $BOARD_UUID"
 
-# Get plugin UUID
-PLUGIN_UUID=$(kubectl get plugin -n default "$PLUGIN_NAME" -o jsonpath='{.status.atProvider.uuid}' 2>/dev/null || echo "")
+# Get plugin UUID - first try spec.forProvider.uuid, then database
+PLUGIN_UUID=$(kubectl get plugin -n default "$PLUGIN_NAME" -o jsonpath='{.spec.forProvider.uuid}' 2>/dev/null || echo "")
 
-if [ -z "$PLUGIN_UUID" ]; then
+if [ -z "$PLUGIN_UUID" ] || [ "$PLUGIN_UUID" == "null" ]; then
+    # Try to get plugin name from Crossplane spec
+    PLUGIN_NAME_DB=$(kubectl get plugin -n default "$PLUGIN_NAME" -o jsonpath='{.spec.forProvider.name}' 2>/dev/null || echo "$PLUGIN_NAME")
+    
     # Try to get from database
     DB_POD=$(kubectl get pod -n default -l io.kompose.service=iotronic-db -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
     if [ -n "$DB_POD" ]; then
-        PLUGIN_UUID=$(kubectl exec -n default "$DB_POD" -- mysql -uroot -ps4t iotronic -Nse "SELECT uuid FROM plugins WHERE name='$PLUGIN_NAME' LIMIT 1;" 2>/dev/null || echo "")
+        PLUGIN_UUID=$(kubectl exec -n default "$DB_POD" -- mysql -h127.0.0.1 -uiotronic -punime iotronic -Nse "SELECT uuid FROM plugins WHERE name='$PLUGIN_NAME_DB' LIMIT 1;" 2>/dev/null || echo "")
     fi
 fi
 
