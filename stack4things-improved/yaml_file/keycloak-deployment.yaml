@@ -60,6 +60,8 @@ spec:
           value: "false"
         - name: KC_PROXY
           value: "edge"
+        - name: KC_HEALT_ENABLED
+          value: "true"
         ports:
         - containerPort: 8080
           name: http
@@ -75,19 +77,17 @@ spec:
           mountPath: /opt/keycloak/data/import
         readinessProbe:
           httpGet:
-            path: /health/ready
-            port: 8080
-            scheme: HTTP
-          initialDelaySeconds: 180
+            path: /realms/stack4things
+            port: 8443
+            scheme: HTTPS
+          initialDelaySeconds: 15
           periodSeconds: 15
           timeoutSeconds: 10
           failureThreshold: 10
         livenessProbe:
-          httpGet:
-            path: /health/live
-            port: 8080
-            scheme: HTTP
-          initialDelaySeconds: 240
+          tcpSocket:
+            port: 8443
+          initialDelaySeconds: 30
           periodSeconds: 30
           timeoutSeconds: 10
           failureThreshold: 5
