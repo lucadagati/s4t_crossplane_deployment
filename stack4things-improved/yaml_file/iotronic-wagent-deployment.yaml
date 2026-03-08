@@ -33,13 +33,13 @@ spec:
                 exec /usr/local/bin/iotronic-wamp-agent --config-file /etc/iotronic/iotronic.conf
           env:
             - name: DB_CONNECTION_STRING
-              value: mysql+pymysql://iotronic:unime@iotronic-db/iotronic
+              value: mysql+pymysql://iotronic:s4t@iotronic-db.default.svc.cluster.local/iotronic
             - name: DB_HOST
-              value: iotronic-db
+              value: iotronic-db.default.svc.cluster.local
             - name: MYSQL_ROOT_PASSWORD
               value: s4t
             - name: OS_AUTH_URL
-              value: http://keystone:5000/v3
+              value: http://keystone.keystone.svc.cluster.local:5000/v3
             - name: OS_PASSWORD
               value: s4t
             - name: OS_PROJECT_DOMAIN_NAME

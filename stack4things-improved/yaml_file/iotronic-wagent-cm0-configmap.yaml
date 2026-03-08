@@ -2,7 +2,7 @@ apiVersion: v1
 data:
   iotronic.conf: |
     [DEFAULT]
-    transport_url = rabbit://openstack:unime@rabbitmq
+    transport_url = rabbit://openstack:s4t@rabbitmq.default.svc.cluster.local
 
     debug=True
     proxy=nginx
@@ -21,7 +21,7 @@ data:
 
 
     [wamp]
-    wamp_transport_url = wss://crossbar:8181/
+    wamp_transport_url = wss://crossbar.default.svc.cluster.local:8181/
     wamp_realm = s4t
     skip_cert_verify= True
     register_agent = True
@@ -29,11 +29,11 @@ data:
 
 
     [database]
-    connection = mysql+pymysql://iotronic:unime@iotronic-db/iotronic
+    connection = mysql+pymysql://iotronic:s4t@iotronic-db.default.svc.cluster.local/iotronic
 
     [keystone_authtoken]
-    www_authenticate_uri = http://keystone:5000
-    auth_url = http://keystone:5000
+    www_authenticate_uri = http://keystone.keystone.svc.cluster.local:5000
+    auth_url = http://keystone.keystone.svc.cluster.local:5000
     auth_plugin = password
     auth_type = password
     project_domain_id = default
