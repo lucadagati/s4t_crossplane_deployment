@@ -27,6 +27,12 @@ spec:
             - /bin/bash
             - -c
             - |2-
+                apt-get update && apt-get install -y mysql-client;
+                echo '[INFO] Attesa che il Conductor crei le tabelle nel database...';
+                until mysql -h iotronic-db.default.svc.cluster.local -uiotronic -ps4t -e "SELECT 1 FROM iotronic.wampagents LIMIT 1;" >/dev/null 2>&1; do
+                  echo '[INFO] Tabella non trovata, attendo il Conductor...';
+                  sleep 5;
+                done;
                 echo '[INFO] Configurazione dei permessi sui log...';
                 chown -R iotronic:iotronic /var/log/iotronic;
                 echo '[INFO] Avvio del Wagent...';

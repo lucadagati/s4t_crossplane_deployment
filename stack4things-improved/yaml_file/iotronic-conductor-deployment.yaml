@@ -30,7 +30,7 @@ spec:
               set -x
               apt-get update && apt-get install -y mysql-client nano;
               echo '[INFO] Attesa del database MySQL...';
-              until mysql -h iotronic-db -uiotronic -punime -e 'SELECT 1' >/dev/null 2>&1; do
+              until mysql -h iotronic-db.default.svc.cluster.local -uiotronic -ps4t -e 'SELECT 1' >/dev/null 2>&1; do
                 echo '[INFO] Database non ancora pronto, riprovo...';
                 sleep 5;
               done;
@@ -64,9 +64,9 @@ spec:
               done
           env:
             - name: DB_CONNECTION_STRING
-              value: mysql+pymysql://iotronic:unime@iotronic-db/iotronic
+              value: mysql+pymysql://iotronic:s4t@iotronic-db.default.svc.cluster.local/iotronic
             - name: DB_HOST
-              value: iotronic-db
+              value: iotronic-db.default.svc.cluster.local
             - name: IOTRONIC_DBPASS
               value: s4t
             - name: IOTRONIC_DB_NAME
@@ -76,7 +76,7 @@ spec:
             - name: MYSQL_ROOT_PASSWORD
               value: s4t
             - name: OS_AUTH_URL
-              value: http://keystone:5000/v3
+              value: http://keystone.keystone.svc.cluster.local:5000/v3
             - name: OS_PASSWORD
               value: s4t
             - name: OS_PROJECT_DOMAIN_NAME
