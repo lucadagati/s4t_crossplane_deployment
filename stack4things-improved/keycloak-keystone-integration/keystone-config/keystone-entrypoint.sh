@@ -33,13 +33,26 @@ if [ ! -f "$MARKER_FILE" ]; then
   apache2ctl -DFOREGROUND &
   APACHE_PID=$!
 
-  echo ">>> Attendo che Keystone risponda su http://localhost:5000/v3/..."
-  until curl -sf http://localhost:5000/v3/ >/dev/null 2>&1; do
-    echo "   ...ancora non pronto, riprovo tra 3s"
+  # echo ">>> Attendo che Keystone risponda su http://localhost:5000/v3/..."
+  # until curl -sf http://localhost:5000/v3/ >/dev/null 2>&1; do
+  #   echo "   ...ancora non pronto, riprovo tra 3s"
+  #   sleep 3
+  # done
+  # echo ">>> Keystone è UP"
+
+  echo ">>> Attendo che Keystone risponda sul Service DNS di Kubernetes..."
+  # Il curl ora punta all'endpoint reale che useranno i comandi openstack
+  until curl -sf http://keystone.keystone.svc.cluster.local:5000/v3/ >/dev/null 2>&1; do
+    echo "   ...connessione DNS/Service non ancora instradata, riprovo tra 3s"
     sleep 3
   done
-  echo ">>> Keystone è UP"
-
+  
+  # Cuscinetto di sicurezza: diamo tempo al database e al routing K8s di stabilizzarsi
+  echo ">>> Endpoint K8s raggiunto. Attendo ulteriori 5 secondi di stabilizzazione..."
+  sleep 5
+  
+  echo ">>> Keystone e Service K8s sono UP e allineati al 100%"
+  
   echo ">>> Esporto variabili OS_* (come da guida)"
   export OS_USERNAME=admin
   export OS_PASSWORD=admin
@@ -60,10 +73,10 @@ if [ ! -f "$MARKER_FILE" ]; then
   openstack group create --domain federated_domain federated_users || true
 
   # Progetto "holding" senza privilegi reali
-  openstack project create federated_access --domain federated_domain || true
+  #openstack project create federated_access --domain federated_domain || true
   # usa reader se esiste, altrimenti member
-  openstack role add --group federated_users --group-domain federated_domain \
-    --project federated_access --project-domain federated_domain member || true
+  #openstack role add --group federated_users --group-domain federated_domain \
+  #  --project federated_access --project-domain federated_domain member || true
 
   # Gruppo provider/platform admin (questi fanno provisioning)
   openstack group create --domain federated_domain s4t:platform-admins || true

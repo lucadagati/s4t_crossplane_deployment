@@ -105,7 +105,14 @@ data:
     #allow_headers =
   policy.json: |
     {
+        "iot:board:get": "rule:is_admin or rule:is_iot_member",
+        "iot:service_on_board:get": "rule:is_admin or rule:is_iot_member",
+        "iot:plugin:get": "rule:is_admin or rule:is_iot_member",
+        "iot:plugin_on_board:get": "rule:is_admin or rule:is_iot_member",
+        "iot:port_on_board:get": "rule:is_admin or rule:is_iot_member",
+        "iot:plugin_inject:put": "rule:is_admin or role:admin_iot_project"
     }
+
 kind: ConfigMap
 metadata:
   labels:
