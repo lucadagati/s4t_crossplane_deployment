@@ -107,6 +107,9 @@ spec:
         - name: keystone-wsgi
           mountPath: /etc/apache2/sites-enabled/keystone.conf
           subPath: wsgi-keystone.conf
+        - name: keystone-entrypoint
+          mountPath: /usr/local/bin/keystone-entrypoint.sh
+          subPath: keystone-entrypoint.sh
         readinessProbe:
           httpGet:
             path: /v3
@@ -132,6 +135,10 @@ spec:
       - name: keystone-wsgi
         configMap:
           name: keystone-wsgi
+      - name: keystone-entrypoint
+        configMap:
+          name: keystone-entrypoint
+          defaultMode: 0777
 ---
 apiVersion: v1
 kind: Service

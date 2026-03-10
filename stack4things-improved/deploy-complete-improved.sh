@@ -183,6 +183,7 @@ EOF
       kubectl create configmap keystone-mapping -n keystone --from-file="$KEYSTONE_CONFIG_DIR/keystone-mapping.json" --dry-run=client -o yaml | kubectl apply -f -
       kubectl create configmap keystone-sso -n keystone --from-file="$KEYSTONE_CONFIG_DIR/sso_callback.html" --dry-run=client -o yaml | kubectl apply -f -
       kubectl create configmap keystone-wsgi -n keystone --from-file="$KEYSTONE_CONFIG_DIR/wsgi-keystone.conf" --dry-run=client -o yaml | kubectl apply -f -
+      kubectl create configmap keystone-entrypoint -n keystone --from-file="$KEYSTONE_CONFIG_DIR/keystone-entrypoint.sh" --dry-run=client -o yaml | kubectl apply -f -
   fi
   echo -e "${GREEN}✔ Ambiente Keycloak/Keystone preparato correttamente.${NC}"
 
@@ -493,6 +494,7 @@ EOF
   else
     echo -e "${YELLOW}⚠️  Database pod not found, skipping wampagent fix${NC}"
   fi
+
 
   # Step 7.3: Compile settings.json for all existing Lightning Rods
   echo "🔄 Running compile-settings-for-all-boards.sh to ensure all Lightning Rods have correct settings.json..."

@@ -19,9 +19,9 @@ if [ ! -f "$MARKER_FILE" ]; then
 
   echo ">>> keystone-manage bootstrap"
   keystone-manage bootstrap --bootstrap-password admin \
-    --bootstrap-admin-url http://keystone.default.svc.cluster.local:5000/v3/ \
-    --bootstrap-internal-url http://keystone.default.svc.cluster.local:5000/v3/ \
-    --bootstrap-public-url http://keystone.default.svc.cluster.local:5000/v3/ \
+    --bootstrap-admin-url http://keystone.keystone.svc.cluster.local:5000/v3/ \
+    --bootstrap-internal-url http://keystone.keystone.svc.cluster.local:5000/v3/ \
+    --bootstrap-public-url http://keystone.keystone.svc.cluster.local:5000/v3/ \
     --bootstrap-region-id RegionOne
 
   echo ">>> chown -R keystone:keystone /etc/keystone"
@@ -60,10 +60,10 @@ if [ ! -f "$MARKER_FILE" ]; then
   openstack group create --domain federated_domain federated_users || true
 
   # Progetto "holding" senza privilegi reali
-  #openstack project create federated_access --domain federated_domain || true
+  openstack project create federated_access --domain federated_domain || true
   # usa reader se esiste, altrimenti member
-  #openstack role add --group federated_users --group-domain federated_domain \
-  #  --project federated_access --project-domain federated_domain reader || true
+  openstack role add --group federated_users --group-domain federated_domain \
+    --project federated_access --project-domain federated_domain member || true
 
   # Gruppo provider/platform admin (questi fanno provisioning)
   openstack group create --domain federated_domain s4t:platform-admins || true
@@ -145,7 +145,7 @@ if [ ! -f "$MARKER_FILE" ]; then
 
   # IdP + mapping + protocol
   openstack identity provider create keycloak \
-    --remote-id https://host.k3d.internal:8443/realms/stack4things || true
+    --remote-id https://keycloak.keycloak.svc.cluster.local:8443/realms/stack4things || true
 
   openstack mapping create keycloak_mapping \
     --rules /etc/keystone/keystone-mapping.json || true
