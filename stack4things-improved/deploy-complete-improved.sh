@@ -69,9 +69,66 @@ ensure_kubeconfig() {
   fi
 }
 
+
+### Install k3s (if needed) ###
+install_k3s() {
+  step "0.5" "Installing k3s (Lightweight Kubernetes)"
+  
+  if command -v k3s &>/dev/null || command -v kubectl &>/dev/null; then
+    echo "✔ k3s or kubectl is already installed, skipping k3s installation."
+  else
+    echo "🔧 Downloading and installing k3s from get.k3s.io..."
+    curl -sfL https://get.k3s.io | sh - || { echo -e "${RED}❌ ERROR: k3s installation failed${NC}"; exit 1; }
+    
+    echo "🔧 Setting kubeconfig permissions..."
+    sleep 5 # Give k3s a moment to generate the file
+    if [ -f /etc/rancher/k3s/k3s.yaml ]; then
+      sudo chmod 644 /etc/rancher/k3s/k3s.yaml || echo -e "${YELLOW}⚠️ Could not set kubeconfig permissions${NC}"
+      echo "✔ kubeconfig permissions set"
+    fi
+    
+    echo "⏳ Waiting for k3s cluster to be ready (this may take a minute)..."
+    for i in {1..30}; do
+      if k3s kubectl cluster-info &>/dev/null 2>&1 || kubectl cluster-info &>/dev/null 2>&1; then
+        echo -e "${GREEN}✔ k3s cluster is ready!${NC}"
+        break
+      fi
+      if [ $i -eq 30 ]; then
+        echo -e "${RED}❌ ERROR: k3s cluster did not become ready within 2.5 minutes${NC}"
+        exit 1
+      fi
+      echo -n "."
+      sleep 5
+    done
+    echo ""
+  fi
+}
+
+
 ### Main deployment ###
 main() {
+  SKIP_K3S=false
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --skip-k3s)
+        SKIP_K3S=true
+        shift
+        ;;
+      *)
+        shift # Ignora altri argomenti sconosciuti
+        ;;
+    esac
+  done
+
   detect_ip_range
+  
+  # Lancia l'installazione di k3s solo se non è stato passato il flag --skip-k3s
+  if [ "$SKIP_K3S" = false ]; then
+    install_k3s
+  else
+    echo -e "${YELLOW}⚠️ Skipping k3s installation (--skip-k3s flag used)${NC}"
+  fi
+
   ensure_kubeconfig
 
   #################################
