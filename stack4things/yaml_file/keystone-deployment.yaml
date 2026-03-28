@@ -58,7 +58,7 @@ spec:
               value: unime
             - name: REGION_NAME
               value: RegionOne
-          image: lucadagati/iotronic-keystone
+          image: mdslab/iotronic-keystone
           livenessProbe:
             exec:
               command:

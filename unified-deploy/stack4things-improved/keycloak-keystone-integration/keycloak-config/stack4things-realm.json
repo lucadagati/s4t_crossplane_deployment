@@ -1,0 +1,30 @@
+{
+  "realm": "stack4things",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "kubernetes",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["*"],
+      "webOrigins": ["*"]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin"
+        }
+      ],
+      "realmRoles": ["default-roles-stack4things", "offline_access", "uma_authorization"]
+    }
+  ]
+}

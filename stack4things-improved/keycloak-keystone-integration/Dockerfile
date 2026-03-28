@@ -1,4 +1,4 @@
-FROM lucadagati/iotronic-keystone
+FROM mdslab/iotronic-keystone
 
 # Passiamo a root per installare i pacchetti
 USER root

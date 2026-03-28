@@ -1,0 +1,8 @@
+docker.io/mdslab/provider-s4t:latest
+docker.io/mdslab/s4t-rbac-operator:latest
+docker.io/mdslab/iotronic-conductor:latest
+docker.io/mdslab/iotronic-keystone:latest
+docker.io/mdslab/iotronic-ui:latest
+docker.io/mdslab/iotronic-wagent:latest
+docker.io/mdslab/iotronic-wstun:latest
+docker.io/mdslab/lrod:compose

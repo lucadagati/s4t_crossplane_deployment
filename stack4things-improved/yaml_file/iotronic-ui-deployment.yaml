@@ -23,7 +23,7 @@ spec:
         io.kompose.service: iotronic-ui
     spec:
       containers:
-        - image: lucadagati/iotronic-ui:latest
+        - image: mdslab/iotronic-ui:latest
           name: iotronic-ui
           ports:
             - containerPort: 80
