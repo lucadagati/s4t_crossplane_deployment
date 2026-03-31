@@ -24,6 +24,36 @@ Per avviare l'infrastruttura, il primo step è lanciare il file di deploy automa
 - **User Mapping:** Inserito `OIDCRemoteUserClaim preferred_username` per mappare e loggare gli utenti tramite username testuale.
 - **Data Injection:** Direttiva `OIDCPassClaimsAs both` per passare i claim del token JWT sia come variabili d'ambiente che come Header HTTP al middleware WSGI di Keystone.
 
+### Mapping di Federazione (Federation Mapping)
+Le regole di mapping permettono la sincronizzazione automatica dal dominio federato: i claim JWT generati da Keycloak vengono processati e mappati per creare on-the-fly gli utenti all'interno del `federated_domain` e per assegnarli sia a gruppi specifici (ruoli dei tenant) sia al gruppo globale `federated_users`:
+
+```json
+[
+  {
+    "local": [
+      {
+        "user": { "name": "{0}", "domain": { "name": "federated_domain" } }
+      },
+      {
+        "group": { "name": "federated_users", "domain": { "name": "federated_domain" } }
+      },
+      {
+        "groups": "{1}",
+        "domain": { "name": "federated_domain" }
+      }
+    ],
+    "remote": [
+      {
+        "type": "OIDC-preferred_username"
+      },
+      {
+        "type": "OIDC-groups"
+      }
+    ]
+  }
+]
+```
+
 ### IoTronic UI (`iotronic-ui-cm1-configmap.yaml`)
 - **Host Management:** Configurazione di `ALLOWED_HOSTS`.
 - **Service Discovery (`OPENSTACK_HOST`):** Aggiornato con l'FQDN Kubernetes di Keystone.
